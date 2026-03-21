@@ -17,6 +17,11 @@ export interface RealisedData {
 
 const DATES_INDEX_KEY = 'rainfall_available_dates';
 
+// Helper to check if KV is configured
+const isKVConfigured = () => {
+  return !!(process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL);
+};
+
 export class FileStorageManager {
   private baseDir: string;
   private warningDir: string;
@@ -66,7 +71,7 @@ export class FileStorageManager {
     const data: WarningData = { date, leadDay, districts };
 
     // 1. Save to KV if available
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       const kvKey = `warning:${year}:${month}:${leadDay}:${day}`;
       await kv.set(kvKey, data);
       await this.addToDatesIndex(date);
@@ -101,7 +106,7 @@ export class FileStorageManager {
     const data: RealisedData = { date, districts };
 
     // 1. Save to KV if available
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       const kvKey = `realised:${year}:${month}:${day}`;
       await kv.set(kvKey, data);
       await this.addToDatesIndex(date);
@@ -132,7 +137,7 @@ export class FileStorageManager {
     leadDay: string
   ): Promise<WarningData | null> {
     // 1. Try KV
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       try {
         const kvKey = `warning:${year}:${month}:${leadDay}:${day}`;
         const data = await kv.get<WarningData>(kvKey);
@@ -166,7 +171,7 @@ export class FileStorageManager {
     day: number
   ): Promise<RealisedData | null> {
     // 1. Try KV
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       try {
         const kvKey = `realised:${year}:${month}:${day}`;
         const data = await kv.get<RealisedData>(kvKey);
@@ -223,7 +228,7 @@ export class FileStorageManager {
     const result = new Map<string, WarningData>();
 
     // 1. Try KV
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       try {
         const pattern = `warning:${year}:${month}:*`;
         const keys = await kv.keys(pattern);
@@ -265,7 +270,7 @@ export class FileStorageManager {
     const result = new Map<string, RealisedData>();
 
     // 1. Try KV
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       try {
         const pattern = `realised:${year}:${month}:*`;
         const keys = await kv.keys(pattern);
@@ -300,7 +305,7 @@ export class FileStorageManager {
     const result = new Set<string>();
 
     // 1. Try KV index
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       try {
         const dates = await kv.smembers(DATES_INDEX_KEY);
         if (dates) {
@@ -337,7 +342,7 @@ export class FileStorageManager {
     day: number,
     leadDay: string
   ): Promise<void> {
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       await kv.del(`warning:${year}:${month}:${leadDay}:${day}`);
     }
     try {
@@ -354,7 +359,7 @@ export class FileStorageManager {
     month: number,
     day: number
   ): Promise<void> {
-    if (process.env.KV_REST_API_URL) {
+    if (isKVConfigured()) {
       await kv.del(`realised:${year}:${month}:${day}`);
     }
     try {

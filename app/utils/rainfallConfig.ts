@@ -66,7 +66,8 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
   let config: RainfallConfig | null = null;
 
   // 1. Try Vercel KV first (if environment variables are present)
-  if (process.env.KV_REST_API_URL) {
+  const kvUrl = process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL;
+  if (kvUrl) {
     try {
       config = await kv.get<RainfallConfig>('rainfall_config');
     } catch (kvError) {
@@ -137,7 +138,8 @@ export async function saveRainfallConfig(config: RainfallConfig): Promise<void> 
     config.lastUpdated = new Date().toISOString();
     
     // 1. Try saving to Vercel KV if available
-    if (process.env.KV_REST_API_URL) {
+    const kvUrl = process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL;
+    if (kvUrl) {
       await kv.set('rainfall_config', config);
     }
 
@@ -155,7 +157,8 @@ export async function saveRainfallConfig(config: RainfallConfig): Promise<void> 
       );
     } catch (fsError) {
       // On Vercel this is expected to fail, we only log it if KV is also missing
-      if (!process.env.KV_REST_API_URL) {
+      const kvUrl = process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL;
+      if (!kvUrl) {
         console.error('Failed to save to FS and KV is not available:', fsError);
         throw fsError;
       }
