@@ -19,11 +19,11 @@ export async function downloadChartAsImage(
   try {
     // Capture the element as a canvas
     const canvas = await html2canvas(element, {
-      background: '#ffffff',
+      backgroundColor: '#ffffff',
       scale: 2, // Higher quality image
       logging: false,
       useCORS: true,
-    });
+    } as any);
 
     // Convert canvas to blob
     canvas.toBlob((blob) => {
