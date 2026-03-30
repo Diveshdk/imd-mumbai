@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 export interface DualModeConfig {
   enabled: boolean;
   threshold: number;
+  heavyCodes: number[];
   labels: {
     below: string;
     above: string;

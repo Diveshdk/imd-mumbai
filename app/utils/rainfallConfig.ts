@@ -12,6 +12,7 @@ import { kv } from '@vercel/kv';
 export interface DualModeConfig {
   enabled: boolean;
   threshold: number;
+  heavyCodes: number[];
   labels: {
     below: string;
     above: string;
@@ -62,6 +63,7 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
   if (configCache && (now - cacheTimestamp) < CACHE_TTL) {
     return configCache;
   }
+<<<<<<< HEAD
 
   let config: RainfallConfig | null = null;
 
@@ -90,12 +92,56 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
   // 3. Last Resort: Default Config
   if (!config) {
     config = {
+=======
+  
+  try {
+    const fileContent = await fs.promises.readFile(CONFIG_PATH, 'utf-8');
+    const config: RainfallConfig = JSON.parse(fileContent);
+    
+    // Migration: Ensure multi-mode items have parentCategory
+    // Use the Dual Mode threshold as a reference if available
+    const dualThreshold = config.classifications.dual.threshold || 64.5;
+    if (config.classifications.multi && config.classifications.multi.items) {
+      config.classifications.multi.items = config.classifications.multi.items.map(item => {
+        if (!item.parentCategory) {
+          return {
+            ...item,
+            parentCategory: item.thresholdMm >= dualThreshold ? 'HEAVY' : 'LOW'
+          };
+        }
+        return item;
+      });
+    }
+
+    // Migration: Ensure dual-mode has heavyCodes
+    if (!config.classifications.dual.heavyCodes) {
+      config.classifications.dual.heavyCodes = [5, 27, 33, 37, 45, 56]; // Default heavy codes
+    }
+
+    configCache = config;
+    cacheTimestamp = now;
+    
+    return config;
+  } catch (error: any) {
+    console.error('Failed to load rainfall config:', error);
+    
+    // Return default config
+    const defaultConfig: RainfallConfig = {
+>>>>>>> 13ab3c0 (final)
       mode: 'dual',
       classifications: {
         dual: {
           enabled: true,
           threshold: 64.5,
+<<<<<<< HEAD
           labels: { below: 'L', above: 'H' }
+=======
+          heavyCodes: [5, 27, 33, 37, 45, 56],
+          labels: {
+            below: 'L',
+            above: 'H'
+          }
+>>>>>>> 13ab3c0 (final)
         },
         multi: {
           enabled: false,
@@ -227,8 +273,9 @@ export async function classifyRainfall(rainfall: number): Promise<string> {
  */
 export function classifyCodeInDualMode(code: number, config: RainfallConfig): string {
   const dualConfig = config.classifications.dual;
-  // Codes >= 5 correspond to heavy rainfall warnings (>= threshold)
-  return code >= 5 ? dualConfig.labels.above : dualConfig.labels.below;
+  // Use user-defined heavy codes if available, otherwise default to legacy >= 5
+  const heavyCodes = dualConfig.heavyCodes || [5, 27, 33, 37, 45, 56];
+  return heavyCodes.includes(code) ? dualConfig.labels.above : dualConfig.labels.below;
 }
 
 /**

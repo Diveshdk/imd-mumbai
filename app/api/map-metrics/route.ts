@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { compareForDateRange, getDistrictWiseAccuracy } from '@/app/utils/comparisonEngine';
+import {
+  compareForDateRange,
+  getDistrictWiseAccuracy,
+  calculateCategoryBinaryAccuracy,
+  type Comparison,
+} from '@/app/utils/comparisonEngine';
+import { loadRainfallConfig } from '@/app/utils/rainfallConfig';
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,6 +13,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const leadDay = searchParams.get('leadDay') || 'D1';
+    const category = searchParams.get('category'); // Optional: multi-mode category filter
 
     if (!startDate || !endDate) {
       return NextResponse.json(
@@ -17,20 +24,45 @@ export async function GET(request: NextRequest) {
 
     // Get comparisons for the date range and lead day
     const comparisons = await compareForDateRange(startDate, endDate, leadDay);
-    
-    // Calculate district-wise statistics
-    const districtStats = getDistrictWiseAccuracy(comparisons);
-    
+
     const districts: Record<string, any> = {};
-    for (const [district, stats] of districtStats.entries()) {
-      districts[district] = {
-        pod: stats.pod,
-        far: stats.far,
-        csi: stats.csi,
-        bias: stats.bias,
-        accuracy: stats.accuracy,
-        total: stats.totalPredictions
-      };
+
+    if (category) {
+      // Per-category binary verification stats (used in Multi-Mode category selector)
+      const config = await loadRainfallConfig();
+
+      // Group comparisons by district
+      const districtMap = new Map<string, Comparison[]>();
+      for (const cmp of comparisons) {
+        if (!districtMap.has(cmp.district)) districtMap.set(cmp.district, []);
+        districtMap.get(cmp.district)!.push(cmp);
+      }
+
+      for (const [district, distComps] of districtMap.entries()) {
+        const stats = calculateCategoryBinaryAccuracy(distComps, category);
+        districts[district] = {
+          pod: stats.pod,
+          far: stats.far,
+          csi: stats.csi,
+          bias: stats.bias,
+          accuracy: stats.accuracy,
+          total: stats.totalPredictions,
+          category,
+        };
+      }
+    } else {
+      // Standard overall verification stats
+      const districtStats = getDistrictWiseAccuracy(comparisons);
+      for (const [district, stats] of districtStats.entries()) {
+        districts[district] = {
+          pod: stats.pod,
+          far: stats.far,
+          csi: stats.csi,
+          bias: stats.bias,
+          accuracy: stats.accuracy,
+          total: stats.totalPredictions,
+        };
+      }
     }
 
     return NextResponse.json({
@@ -38,9 +70,9 @@ export async function GET(request: NextRequest) {
       startDate,
       endDate,
       leadDay,
-      districts
+      category: category || null,
+      districts,
     });
-
   } catch (error: any) {
     console.error('Map metrics API error:', error);
     return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { compareForDateRange, calculateAccuracy, getDistrictWiseAccuracy } from '@/app/utils/comparisonEngine';
+import { loadRainfallConfig } from '@/app/utils/rainfallConfig';
 
 /**
  * POST /api/analysis/heavy-rainfall
@@ -12,7 +13,14 @@ import { compareForDateRange, calculateAccuracy, getDistrictWiseAccuracy } from 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { mode, selectedDay, threshold = 64.5, startDate, endDate } = body;
+    const config = await loadRainfallConfig();
+    const { 
+      mode, 
+      selectedDay, 
+      threshold = config.classifications.dual.threshold, 
+      startDate, 
+      endDate 
+    } = body;
 
     // Validate inputs
     if (!startDate || !endDate) {

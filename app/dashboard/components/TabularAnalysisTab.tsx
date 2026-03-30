@@ -37,7 +37,6 @@ interface AllMetricsData {
 }
 
 export default function TabularAnalysisTab() {
-  const [threshold, setThreshold] = useState<number>(64.5);
   const [startDate, setStartDate] = useState<string>('2025-06-01');
   const [endDate, setEndDate] = useState<string>('2025-06-30');
   const [isLoading, setIsLoading] = useState(false);
@@ -66,7 +65,6 @@ export default function TabularAnalysisTab() {
           body: JSON.stringify({
             mode: 'day-wise',
             selectedDay: day,
-            threshold,
             startDate,
             endDate
           })
@@ -131,7 +129,8 @@ export default function TabularAnalysisTab() {
       // Row 3: Threshold/Mode
       excelData.push([`Mode: ${config?.mode === 'multi' ? 'Multi-Category' : 'Dual (Binary)'}`]);
       if (config?.mode !== 'multi') {
-        excelData.push([`Threshold: ${threshold}mm`]);
+        const threshold = config?.classifications?.dual?.threshold;
+        excelData.push([`Threshold: ${threshold !== undefined ? threshold : '...'}mm (Admin)`]);
       }
       
       // Row 4: Empty
@@ -268,27 +267,12 @@ export default function TabularAnalysisTab() {
 
           <div>
             <label className="block text-sm font-bold text-black mb-2">
-              {config?.mode === 'multi' ? 'Threshold Info' : 'Heavy Rainfall Threshold (mm)'}
+              Threshold / Method
             </label>
-            {config?.mode === 'multi' ? (
-              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600 font-bold">
-                Managed in Admin Config
-              </div>
-            ) : (
-              <>
-                <input
-                  type="number"
-                  value={isNaN(threshold) ? '' : threshold}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setThreshold(val);
-                  }}
-                  step="0.1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-                <p className="text-xs text-black font-bold mt-1">Default: 64.5mm</p>
-              </>
-            )}
+            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 font-bold">
+              {config?.mode === 'multi' ? 'Multi-Category (Admin Config)' : `${config?.classifications?.dual?.threshold ?? '...'} mm (Admin Config)`}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Change this in Admin Panel only</p>
           </div>
 
           <div>
@@ -348,7 +332,7 @@ export default function TabularAnalysisTab() {
               <div>
                 <span className="text-black font-bold">Threshold/Method:</span>
                 <span className="ml-2 font-black text-gray-900">
-                  {config?.mode === 'multi' ? 'Multi-Category' : `${threshold}mm`}
+                  {config?.mode === 'multi' ? 'Multi-Category' : `${config?.classifications?.dual?.threshold ?? '...'}mm (Admin)`}
                 </span>
               </div>
               <div>

@@ -1,22 +1,30 @@
 {
-  "mode": "dual",
+  "mode": "multi",
   "classifications": {
     "dual": {
-      "enabled": true,
+      "enabled": false,
       "threshold": 64.5,
       "labels": {
         "below": "L",
         "above": "H"
-      }
+      },
+      "heavyCodes": [
+        5,
+        27,
+        33,
+        37,
+        45,
+        56
+      ]
     },
     "multi": {
-      "enabled": false,
+      "enabled": true,
       "items": [
         {
           "id": "L",
           "variableName": "L",
           "label": "Less",
-          "thresholdMm": 0,
+          "thresholdMm": 2.5,
           "codes": [
             1,
             2,
@@ -89,5 +97,5 @@
       ]
     }
   },
-  "lastUpdated": "2026-03-21T09:10:26.304Z"
+  "lastUpdated": "2026-03-26T09:42:19.035Z"
 }

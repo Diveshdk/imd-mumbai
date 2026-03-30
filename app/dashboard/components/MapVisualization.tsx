@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { 
+  getRainfallColor,
   getRainfallColorDynamic, 
   getRainfallCategory, 
   getMonthlyRainfallColor,
@@ -26,6 +27,10 @@ interface MapVisualizationProps {
   selectedMonth: string;
   metric?: 'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision' | 'accuracy';
   metricData?: Record<string, any>;
+  /** If false, disables all map interaction (drag, zoom, scroll, keyboard). Default: true */
+  interactive?: boolean;
+  /** If true, shows a short metric label instead of full heading text. Default: false */
+  compact?: boolean;
 }
 
 // Maharashtra Meteorological Subdivisions
@@ -58,13 +63,109 @@ function FitBounds({ geoJsonData }: { geoJsonData: any }) {
 
   useEffect(() => {
     if (geoJsonData) {
-      const geoJsonLayer = L.geoJSON(geoJsonData);
-      const bounds = geoJsonLayer.getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [50, 50] });
-      }
+      // Ensure the map container size is correctly recognized before fitting bounds
+      const timer = setTimeout(() => {
+        map.invalidateSize();
+        const geoJsonLayer = L.geoJSON(geoJsonData);
+        const bounds = geoJsonLayer.getBounds();
+        if (bounds.isValid()) {
+          // Use more padding for compact/panel maps to prevent clipping during capture
+          const p = 15; 
+          map.fitBounds(bounds, { padding: [p, p] });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
     }
   }, [geoJsonData, map]);
+
+  // Handle window resize to re-invalidate and re-center
+  useEffect(() => {
+    const handleResize = () => {
+      map.invalidateSize();
+      if (geoJsonData) {
+        const bounds = L.geoJSON(geoJsonData).getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [10, 10] });
+        }
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [map, geoJsonData]);
+
+  return null;
+}
+
+// Component to add value labels for districts (metric value or rainfall mm)
+interface MapValueLabelsProps {
+  geoJsonData: any;
+  metric: string;
+  metricData: Record<string, any>;
+  rainfallData: DistrictRainfall[];
+  viewMode: 'daily' | 'monthly';
+}
+
+function MapValueLabels({ geoJsonData, metric, metricData, rainfallData, viewMode }: MapValueLabelsProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!geoJsonData) return;
+    
+    // No labels for subdivision
+    if (metric === 'subdivision') return;
+
+    // Build a quick lookup for rainfall data
+    const rainfallMap = new Map<string, number>();
+    rainfallData.forEach(item => rainfallMap.set(item.district, item.rainfall));
+
+    const labelGroup = L.layerGroup().addTo(map);
+    const geoJsonLayer = L.geoJSON(geoJsonData);
+    
+    geoJsonLayer.eachLayer((layer: any) => {
+      if (layer.getBounds) {
+        const distCol = findDistrictColumn(layer.feature.properties);
+        const districtNorm = layer.feature.properties['DISTRICT_NORM'] || '';
+        
+        let labelText = '';
+
+        if (metric === 'rainfall') {
+          const val = rainfallMap.get(districtNorm);
+          if (val !== undefined && val > 0) {
+            labelText = `${val.toFixed(0)}`;
+          }
+        } else {
+          // Verification metric: show numeric value
+          const stats = metricData[districtNorm];
+          if (stats) {
+            const val = stats[metric];
+            if (typeof val === 'number') {
+              if (metric === 'accuracy') {
+                labelText = `${val.toFixed(0)}%`;
+              } else if (metric === 'bias') {
+                labelText = val.toFixed(2);
+              } else {
+                labelText = val.toFixed(2);
+              }
+            }
+          }
+        }
+
+        if (labelText) {
+          L.marker(layer.getBounds().getCenter(), {
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="font-size: 9px; font-weight: 800; color: #111; text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff; text-align: center; width: 50px; transform: translateX(-25px); pointer-events: none; letter-spacing: 0.3px;">${labelText}</div>`,
+            }),
+            interactive: false
+          }).addTo(labelGroup);
+        }
+      }
+    });
+
+    return () => {
+      map.removeLayer(labelGroup);
+    };
+  }, [geoJsonData, map, metric, metricData, rainfallData, viewMode]);
 
   return null;
 }
@@ -75,7 +176,9 @@ export default function MapVisualization({
   selectedDate,
   selectedMonth,
   metric = 'rainfall',
-  metricData = {}
+  metricData = {},
+  interactive = true,
+  compact = false,
 }: MapVisualizationProps) {
   const [geoJsonData, setGeoJsonData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,10 +205,6 @@ export default function MapVisualization({
             if (distCol && feature.properties[distCol]) {
               const distName = feature.properties[distCol].toString();
               feature.properties['DISTRICT_NORM'] = normalizeDistrictName(distName);
-              // Special case for Goa in Map
-              if (feature.properties['DISTRICT_NORM'] === 'NORTH GOA' || feature.properties['DISTRICT_NORM'] === 'SOUTH GOA') {
-                 // Rainfall data usually uses 'GOA'
-              }
             }
           });
           return data.features;
@@ -188,7 +287,7 @@ export default function MapVisualization({
     if (metric === 'rainfall') {
       const rainfall = rainfallMap.get(districtNorm)?.rainfall || 0;
       if (viewMode === 'daily') {
-        color = config ? getRainfallColorDynamic(rainfall, config) : '#D3D3D3';
+        color = getRainfallColor(rainfall);
       } else {
         color = getMonthlyRainfallColor(rainfall);
       }
@@ -290,40 +389,68 @@ export default function MapVisualization({
     );
   }
 
+  const mapHeight = compact ? '450px' : '700px';
+
   return (
-    <div className="relative">
+    <div 
+      className="relative overflow-hidden" 
+      id={compact ? undefined : 'map-visualization-container'}
+      style={{ backgroundColor: '#f0f9ff', borderRadius: '0.5rem', border: '1px solid #e5e7eb', height: mapHeight }}
+    >
       <MapContainer
         center={[19.7515, 75.7139]}
         zoom={7}
-        style={{ height: '600px', width: '100%', borderRadius: '0.5rem' }}
+        minZoom={6}
+        // Use preferCanvas only in interactive mode — SVG is needed for html2canvas export
+        preferCanvas={interactive}
+        style={{ height: mapHeight, width: '100%', borderRadius: '0.5rem', background: 'transparent' }}
         className="z-0"
+        zoomControl={!compact}
+        dragging={interactive}
+        scrollWheelZoom={!compact}
+        doubleClickZoom={!compact}
+        touchZoom={!compact}
+        keyboard={interactive}
+        boxZoom={interactive}
       >
-        <TileLayer
-          attribution='&copy; OpenStreetMap'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
         <GeoJSON
-          key={`${JSON.stringify(rainfallData)}-${metric}-${config?.mode}`}
+          key={`${JSON.stringify(rainfallData)}-${metric}-${config?.mode}-${JSON.stringify(Object.keys(metricData))}`}
           data={geoJsonData}
           style={style}
           onEachFeature={onEachFeature}
         />
+        <MapValueLabels
+          geoJsonData={geoJsonData}
+          metric={metric}
+          metricData={metricData}
+          rainfallData={rainfallData}
+          viewMode={viewMode}
+        />
         <FitBounds geoJsonData={geoJsonData} />
       </MapContainer>
 
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white bg-opacity-90 px-4 py-2 rounded-lg shadow-lg z-[1000]">
-        <h3 className="text-lg font-bold text-gray-900">
-          {metric === 'rainfall' 
-            ? (viewMode === 'daily' 
-                ? `Daily Rainfall: ${new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
-                : `Accumulated Rainfall: ${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`)
-            : metric === 'subdivision' 
-              ? 'Meteorological Subdivisions'
-              : `Verification Metric: ${metric.toUpperCase()}`
-          }
-        </h3>
-      </div>
+      {/* Map title overlay — compact mode shows short label only */}
+      {!compact && (
+        <div 
+          className="absolute top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 z-[1000]"
+          style={{ 
+            backgroundColor: 'rgba(255, 255, 255, 0.9)', 
+            borderRadius: '0.5rem', 
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' 
+          }}
+        >
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111827', margin: 0 }}>
+            {metric === 'rainfall' 
+              ? (viewMode === 'daily' 
+                  ? `Rainfall: ${new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                  : `Rainfall: ${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`)
+              : metric === 'subdivision' 
+                ? 'Subdivisions'
+                : metric.toUpperCase()
+            }
+          </h3>
+        </div>
+      )}
     </div>
   );
 }
-

@@ -29,10 +29,25 @@ export class FileStorageManager {
   private warningDir: string;
   private realisedDir: string;
 
-  constructor(baseDir: string = 'data') {
-    this.baseDir = baseDir;
-    this.warningDir = path.join(baseDir, 'warning');
-    this.realisedDir = path.join(baseDir, 'realised');
+  constructor() {
+    // For Electron or generic environments, determine the best data directory
+    const isElectron =
+      typeof process !== 'undefined' &&
+      process.versions &&
+      !!process.versions.electron;
+
+    if (isElectron) {
+      // In Electron, use the user's home directory or appData to avoid permission issues
+      const { app } = require('electron');
+      // If we are in the main process, we can use app.getPath('userData')
+      // If we are in a worker or Next.js API route, we might need to use a relative path or environment variable
+      this.baseDir = process.env.APP_DATA_PATH || path.join(process.cwd(), 'data');
+    } else {
+      this.baseDir = 'data';
+    }
+
+    this.warningDir = path.join(this.baseDir, 'warning');
+    this.realisedDir = path.join(this.baseDir, 'realised');
   }
 
   /**

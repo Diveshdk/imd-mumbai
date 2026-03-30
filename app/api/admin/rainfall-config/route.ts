@@ -67,10 +67,12 @@ export async function POST(request: NextRequest) {
     // }
     
     // Migration: Ensure multi-mode items have parentCategory BEFORE validation
+    // Use the Dual Mode threshold as a reference if available
+    const dualThreshold = config.classifications.dual.threshold || 64.5;
     if (config.mode === 'multi' && config.classifications.multi && config.classifications.multi.items) {
       config.classifications.multi.items = config.classifications.multi.items.map((item: MultiModeClassification) => ({
         ...item,
-        parentCategory: item.parentCategory || (item.thresholdMm >= 64.5 ? 'HEAVY' : 'LOW')
+        parentCategory: item.parentCategory || (item.thresholdMm >= dualThreshold ? 'HEAVY' : 'LOW')
       }));
     }
 
@@ -118,6 +120,23 @@ export async function POST(request: NextRequest) {
         // Validate parentCategory (now should be present due to migration above)
         if (!classification.parentCategory || (classification.parentCategory !== 'LOW' && classification.parentCategory !== 'HEAVY')) {
           errors.push(`Classification ${i + 1} (${classification.label}): Parent category must be LOW or HEAVY`);
+        }
+      }
+    } else if (config.mode === 'dual') {
+      const dual = config.classifications.dual;
+      
+      // Validate threshold
+      if (typeof dual.threshold !== 'number' || dual.threshold < 0) {
+        errors.push("Dual Mode: Threshold must be a non-negative number");
+      }
+
+      if (!Array.isArray(dual.heavyCodes)) {
+        errors.push("Dual Mode: heavyCodes must be an array");
+      } else {
+        for (const code of dual.heavyCodes) {
+          if (!Number.isInteger(code) || code < 0) {
+            errors.push(`Dual Mode: Code ${code} must be a non-negative integer`);
+          }
         }
       }
     }

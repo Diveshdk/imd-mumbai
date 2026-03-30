@@ -284,6 +284,24 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
     });
   };
 
+  const handleDualThresholdBlur = () => {
+    if (!editedConfig) return;
+    const raw = thresholdInputs['dual-threshold'] ?? '';
+    const val = parseFloat(raw);
+    if (isNaN(val)) return;
+
+    setEditedConfig({
+      ...editedConfig,
+      classifications: {
+        ...editedConfig.classifications,
+        dual: {
+          ...editedConfig.classifications.dual,
+          threshold: val
+        }
+      }
+    });
+  };
+
   const handleCodesChange = (index: number, codesString: string) => {
     const codes = codesString
       .split(',')
@@ -326,6 +344,50 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
     const newCodes = currentItem.codes.filter(c => c !== code);
     handleUpdateClassification(index, 'codes', newCodes);
     toast.success(`Code ${code} removed`);
+  };
+
+  const handleAddDualCode = (code: number) => {
+    if (!editedConfig) return;
+
+    const currentCodes = editedConfig.classifications.dual.heavyCodes || [];
+    
+    if (currentCodes.includes(code)) {
+      toast.error(`Code ${code} already exists in Heavy category`);
+      return;
+    }
+
+    const newCodes = [...currentCodes, code].sort((a, b) => a - b);
+    
+    setEditedConfig({
+      ...editedConfig,
+      classifications: {
+        ...editedConfig.classifications,
+        dual: {
+          ...editedConfig.classifications.dual,
+          heavyCodes: newCodes
+        }
+      }
+    });
+    toast.success(`Code ${code} added to Heavy category`);
+  };
+
+  const handleRemoveDualCode = (code: number) => {
+    if (!editedConfig) return;
+
+    const currentCodes = editedConfig.classifications.dual.heavyCodes || [];
+    const newCodes = currentCodes.filter(c => c !== code);
+    
+    setEditedConfig({
+      ...editedConfig,
+      classifications: {
+        ...editedConfig.classifications,
+        dual: {
+          ...editedConfig.classifications.dual,
+          heavyCodes: newCodes
+        }
+      }
+    });
+    toast.success(`Code ${code} removed from Heavy category`);
   };
 
 
@@ -462,23 +524,142 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
                 {editedConfig.mode === 'dual' && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-blue-900 mb-4">Dual Mode Configuration</h3>
-                    <div className="bg-white rounded-lg p-4 border border-blue-200">
-                      <p className="text-sm text-gray-700 mb-3">
-                        <strong>Fixed Binary Classification:</strong>
-                      </p>
-                      <ul className="space-y-2 text-sm text-gray-600">
-                        <li className="flex items-center">
-                          <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                          Below 64.5mm → <strong className="ml-1 text-blue-700">L (Less)</strong>
-                        </li>
-                        <li className="flex items-center">
-                          <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                          ≥ 64.5mm → <strong className="ml-1 text-red-700">H (Heavy)</strong>
-                        </li>
-                      </ul>
-                      <p className="text-xs text-gray-500 mt-4 italic">
-                        No editable fields in dual mode. Threshold is fixed at 64.5mm.
-                      </p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-white rounded-lg p-4 border border-blue-200">
+                        <p className="text-sm text-gray-700 mb-3">
+                          <strong>Classification Logic:</strong>
+                        </p>
+                        <div className="mb-4">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Rainfall Threshold (mm)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={
+                                thresholdInputs['dual-threshold'] !== undefined
+                                  ? thresholdInputs['dual-threshold']
+                                  : String(editedConfig.classifications.dual.threshold)
+                              }
+                              onChange={(e) => handleThresholdChange('dual-threshold', e.target.value)}
+                              onBlur={handleDualThresholdBlur}
+                              onFocus={() => {
+                                if (thresholdInputs['dual-threshold'] === undefined) {
+                                  setThresholdInputs(prev => ({ 
+                                    ...prev, 
+                                    ['dual-threshold']: String(editedConfig.classifications.dual.threshold) 
+                                  }));
+                                }
+                              }}
+                              className="w-24 px-2 py-1 border border-blue-300 rounded text-sm text-gray-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="text-xs text-gray-500 italic">mm</span>
+                          </div>
+                        </div>
+                        <ul className="space-y-4 text-sm text-gray-600">
+                          <li className="flex flex-col gap-2">
+                            <div className="flex items-center">
+                              <span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
+                              <span>Below {editedConfig.classifications.dual.threshold}mm → </span>
+                              <strong className="ml-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                {editedConfig.classifications.dual.labels.below} (Less)
+                              </strong>
+                            </div>
+                            <p className="text-[10px] text-gray-500 italic pl-5">
+                              Applied to all codes NOT explicitly defined as Heavy.
+                            </p>
+                          </li>
+                          <li className="flex flex-col gap-2">
+                            <div className="flex items-center">
+                              <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
+                              <span>≥ {editedConfig.classifications.dual.threshold}mm → </span>
+                              <strong className="ml-1 text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-100">
+                                {editedConfig.classifications.dual.labels.above} (Heavy)
+                              </strong>
+                            </div>
+                            <p className="text-[10px] text-gray-500 italic pl-5">
+                              Applied to specific codes entered on the right.
+                            </p>
+                          </li>
+                        </ul>
+                        <div className="mt-6 pt-4 border-t border-gray-100">
+                          <p className="text-[10px] text-gray-400">
+                            Threshold is fixed at 64.5mm in Dual Mode. To use custom thresholds, switch to Multi Mode.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-4 border border-blue-200">
+                        <p className="text-sm font-semibold text-gray-900 mb-3">
+                          Heavy Category Codes:
+                        </p>
+                        <div className="space-y-4">
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              id="dual-code-input"
+                              placeholder="Enter code (e.g. 5)"
+                              className="flex-1 px-3 py-2 border border-blue-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const input = e.currentTarget;
+                                  const code = parseInt(input.value);
+                                  if (!isNaN(code)) {
+                                    handleAddDualCode(code);
+                                    input.value = '';
+                                  }
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                const input = document.getElementById('dual-code-input') as HTMLInputElement;
+                                if (input) {
+                                  const code = parseInt(input.value);
+                                  if (!isNaN(code)) {
+                                    handleAddDualCode(code);
+                                    input.value = '';
+                                  }
+                                }
+                              }}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors shadow-sm"
+                            >
+                              Add
+                            </button>
+                          </div>
+                          
+                          <div className="min-h-[100px] border border-gray-100 rounded-md p-3 bg-gray-50">
+                            <div className="flex flex-wrap gap-2">
+                              {(editedConfig.classifications.dual.heavyCodes || []).map((code) => (
+                                <div
+                                  key={code}
+                                  className="flex items-center gap-1.5 px-2 py-1 bg-red-50 border border-red-200 text-red-700 rounded-md text-xs font-semibold shadow-sm animate-in fade-in zoom-in duration-200"
+                                >
+                                  <span>{code}</span>
+                                  <button
+                                    onClick={() => handleRemoveDualCode(code)}
+                                    className="hover:text-red-900 transition-colors p-0.5"
+                                    title="Remove code"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                              {(editedConfig.classifications.dual.heavyCodes || []).length === 0 && (
+                                <p className="text-xs text-gray-400 italic py-2">No codes added. All rainfall will be classified as 'Less'.</p>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-gray-500 italic">
+                            All codes NOT listed here will automatically fall into the <strong>Less Rainfall ({editedConfig.classifications.dual.labels.below})</strong> category.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

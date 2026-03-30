@@ -51,8 +51,9 @@ export interface AccuracyStats {
  * Classify rainfall using current mode (dual or multi)
  * Accepts an optional dualThresholdOverride so UI can pass a custom threshold
  */
-function classifyRainfallValue(rainfall: number, config: any, dualThresholdOverride?: number): string {
-  if (config.mode === 'dual') {
+function classifyRainfallValue(rainfall: number, config: any, dualThresholdOverride?: number, modeOverride?: 'dual' | 'multi'): string {
+  const mode = modeOverride || config.mode;
+  if (mode === 'dual') {
     const dual = config.classifications.dual;
     const threshold = dualThresholdOverride !== undefined ? dualThresholdOverride : dual.threshold;
     return rainfall >= threshold ? dual.labels.above : dual.labels.below;
@@ -72,12 +73,13 @@ function classifyRainfallValue(rainfall: number, config: any, dualThresholdOverr
  * Classify warning code using current mode (dual or multi)
  * Accepts an optional dualThresholdOverride - in dual mode, codes >= 5 map to heavy (same logic)
  */
-function classifyWarningCode(code: number, config: any, dualThresholdOverride?: number): string {
-  if (config.mode === 'dual') {
+function classifyWarningCode(code: number, config: any, dualThresholdOverride?: number, modeOverride?: 'dual' | 'multi'): string {
+  const mode = modeOverride || config.mode;
+  if (mode === 'dual') {
     const dual = config.classifications.dual;
-    // Warning codes >= 5 correspond to heavy rainfall; this mapping is fixed by IMD standard
-    // The threshold override affects rainfall classification but code mapping stays as-is
-    return code >= 5 ? dual.labels.above : dual.labels.below;
+    // Use user-defined heavy codes if available, otherwise default to legacy >= 5
+    const heavyCodes = dual.heavyCodes || [5, 27, 33, 37, 45, 56];
+    return heavyCodes.includes(code) ? dual.labels.above : dual.labels.below;
   } else {
     const item = config.classifications.multi.items.find((i: any) => i.codes.includes(code));
     if (item) return item.variableName;
@@ -90,9 +92,12 @@ function classifyWarningCode(code: number, config: any, dualThresholdOverride?: 
 
 /**
  * Helper to get level and parent category from label
+ * FIXED: accepts modeOverride so HRV-2 can force multi-mode resolution
+ * even when global config.mode is 'dual'.
  */
-function getInfoForLabel(label: string, config: any): { level: number; pc: 'LOW' | 'HEAVY' } {
-  if (config.mode === 'dual') {
+function getInfoForLabel(label: string, config: any, modeOverride?: 'dual' | 'multi'): { level: number; pc: 'LOW' | 'HEAVY' } {
+  const mode = modeOverride || config.mode;
+  if (mode === 'dual') {
     const isAbove = label === config.classifications.dual.labels.above;
     return {
       level: isAbove ? 2 : 1,
@@ -102,9 +107,11 @@ function getInfoForLabel(label: string, config: any): { level: number; pc: 'LOW'
     const item = config.classifications.multi.items.find((i: any) => i.variableName === label);
     if (item) {
       // Fallback for parentCategory based on IMD standards if missing
+      // Use the Dual Mode threshold as a reference if available
       let pc = item.parentCategory;
       if (!pc) {
-        pc = item.thresholdMm >= 64.5 ? 'HEAVY' : 'LOW';
+        const dualThreshold = config.classifications.dual.threshold || 64.5;
+        pc = item.thresholdMm >= dualThreshold ? 'HEAVY' : 'LOW';
       }
       return { level: item.level, pc };
     }
@@ -142,7 +149,8 @@ export async function compareForDate(
   selectedYear?: number,
   selectedMonth?: number,
   selectedDay?: number,
-  dualThresholdOverride?: number
+  dualThresholdOverride?: number,
+  modeOverride?: 'dual' | 'multi'
 ): Promise<Comparison[]> {
   const issueDateStr = formatDate(issueYear, issueMonth, issueDay);
   let verificationDate;
@@ -210,11 +218,12 @@ export async function compareForDate(
       continue;
     }
 
-    const forecastClass = rawWarningCode != null ? classifyWarningCode(rawWarningCode, config, dualThresholdOverride) : 'L';
-    const realisedClass = rawRealisedRainfall != null ? classifyRainfallValue(rawRealisedRainfall, config, dualThresholdOverride) : 'L';
+    const forecastClass = rawWarningCode != null ? classifyWarningCode(rawWarningCode, config, dualThresholdOverride, modeOverride) : 'L';
+    const realisedClass = rawRealisedRainfall != null ? classifyRainfallValue(rawRealisedRainfall, config, dualThresholdOverride, modeOverride) : 'L';
 
-    const fInfo = getInfoForLabel(forecastClass, config);
-    const rInfo = getInfoForLabel(realisedClass, config);
+    // FIXED: pass modeOverride so HRV-2 multi-mode level/category lookups are correct
+    const fInfo = getInfoForLabel(forecastClass, config, modeOverride);
+    const rInfo = getInfoForLabel(realisedClass, config, modeOverride);
 
     const forecastLevel = fInfo.level;
     const realisedLevel = rInfo.level;
@@ -262,7 +271,8 @@ export async function compareForDateRange(
   startDate: string,
   endDate: string,
   leadDay: string,
-  dualThresholdOverride?: number
+  dualThresholdOverride?: number,
+  modeOverride?: 'dual' | 'multi'
 ): Promise<Comparison[]> {
   const start = parseDate(startDate);
   const end = parseDate(endDate);
@@ -279,7 +289,7 @@ export async function compareForDateRange(
     const issueDay = currentDate.getDate();
 
     // Get comparisons for this issue date
-    const comparisons = await compareForDate(issueYear, issueMonth, issueDay, leadDay, undefined, undefined, undefined, dualThresholdOverride);
+    const comparisons = await compareForDate(issueYear, issueMonth, issueDay, leadDay, undefined, undefined, undefined, dualThresholdOverride, modeOverride);
     allComparisons.push(...comparisons);
 
     // Move to next day
@@ -381,6 +391,72 @@ export async function compareMultipleLeadDays(
   }
 
   return results;
+}
+
+/**
+ * Calculate binary accuracy statistics for a specific category
+ * Treated as a binary event: Category vs Not Category
+ */
+export function calculateCategoryBinaryAccuracy(
+  comparisons: Comparison[],
+  category: string
+): AccuracyStats {
+  if (comparisons.length === 0) {
+    return {
+      totalPredictions: 0,
+      correct: 0,
+      falseAlarms: 0,
+      missedEvents: 0,
+      correctNegatives: 0,
+      accuracy: 0,
+      pod: 0,
+      far: 0,
+      csi: 0,
+      bias: 0
+    };
+  }
+
+  // Hit (H): Forecast = Category AND Observed = Same Category
+  const H = comparisons.filter(
+    c => c.forecastClassification === category && c.realisedClassification === category
+  ).length;
+
+  // Miss (M): Observed = Category BUT Forecast ≠ Category
+  const M = comparisons.filter(
+    c => c.forecastClassification !== category && c.realisedClassification === category
+  ).length;
+
+  // False Alarm (F): Forecast = Category BUT Observed ≠ Category
+  const F = comparisons.filter(
+    c => c.forecastClassification === category && c.realisedClassification !== category
+  ).length;
+
+  // Correct Negative (CN): All other cases
+  const CN = comparisons.filter(
+    c => c.forecastClassification !== category && c.realisedClassification !== category
+  ).length;
+
+  const totalPredictions = comparisons.length;
+  const accuracy = ((H + CN) / totalPredictions) * 100;
+
+  // Skills Scores
+  const pod = (H + M) > 0 ? H / (H + M) : 0;
+  const far = (H + F) > 0 ? F / (H + F) : 0;
+  const csi = (H + M + F) > 0 ? H / (H + M + F) : 0;
+  const bias = (H + M) > 0 ? (H + F) / (H + M) : 0;
+
+  return {
+    totalPredictions,
+    correct: H,
+    falseAlarms: F,
+    missedEvents: M,
+    correctNegatives: CN,
+    accuracy,
+    pod,
+    far,
+    csi,
+    bias
+  };
 }
 
 /**

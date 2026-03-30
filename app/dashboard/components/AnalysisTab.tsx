@@ -98,7 +98,6 @@ interface ComparisonData {
 export default function AnalysisTab() {
   const [analysisMode, setAnalysisMode] = useState<'day-wise' | 'comparison'>('day-wise');
   const [selectedDay, setSelectedDay] = useState<string>('D1');
-  const [threshold, setThreshold] = useState<number>(64.5);
   const [startDate, setStartDate] = useState<string>('2025-06-01');
   const [endDate, setEndDate] = useState<string>('2025-06-30');
   const [isLoading, setIsLoading] = useState(false);
@@ -118,7 +117,6 @@ export default function AnalysisTab() {
         body: JSON.stringify({
           mode: analysisMode,
           selectedDay: analysisMode === 'day-wise' ? selectedDay : undefined,
-          threshold,
           startDate,
           endDate
         })
@@ -270,27 +268,12 @@ export default function AnalysisTab() {
 
           <div>
             <label className="block text-sm font-bold text-black mb-2">
-              {config?.mode === 'multi' ? 'Threshold Info' : 'Heavy Rainfall Threshold (mm)'}
+              Threshold / Method
             </label>
-            {config?.mode === 'multi' ? (
-              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600 font-bold">
-                Managed in Admin Config
-              </div>
-            ) : (
-              <>
-                <input
-                  type="number"
-                  value={isNaN(threshold) ? '' : threshold}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setThreshold(val);
-                  }}
-                  step="0.1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                />
-                <p className="text-xs text-black font-bold mt-1">Default: 64.5mm</p>
-              </>
-            )}
+            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 font-bold">
+              {config?.mode === 'multi' ? 'Multi-Category (Admin Config)' : `${config?.classifications?.dual?.threshold ?? '...'} mm (Admin Config)`}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Change this in Admin Panel only</p>
           </div>
 
           <div>
@@ -404,7 +387,7 @@ export default function AnalysisTab() {
               <div>
                 <span className="text-black font-bold">Threshold/Method:</span>
                 <span className="ml-2 font-black text-black">
-                  {config?.mode === 'multi' ? 'Multi-Category' : `${dayWiseData.threshold}mm`}
+                  {config?.mode === 'multi' ? 'Multi-Category' : `${dayWiseData.threshold ?? '...'}mm`}
                 </span>
               </div>
               <div>
@@ -770,7 +753,7 @@ export default function AnalysisTab() {
               <div>
                 <span className="text-black font-bold">Threshold/Method:</span>
                 <span className="ml-2 font-black text-black">
-                  {config?.mode === 'multi' ? 'Multi-Category' : `${comparisonData.threshold}mm`}
+                  {config?.mode === 'multi' ? 'Multi-Category' : `${comparisonData.threshold ?? '...'}mm`}
                 </span>
               </div>
               <div>
