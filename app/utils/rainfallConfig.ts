@@ -63,8 +63,6 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
   if (configCache && (now - cacheTimestamp) < CACHE_TTL) {
     return configCache;
   }
-<<<<<<< HEAD
-
   let config: RainfallConfig | null = null;
 
   // 1. Try Vercel KV first (if environment variables are present)
@@ -89,17 +87,8 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
     }
   }
   
-  // 3. Last Resort: Default Config
-  if (!config) {
-    config = {
-=======
-  
-  try {
-    const fileContent = await fs.promises.readFile(CONFIG_PATH, 'utf-8');
-    const config: RainfallConfig = JSON.parse(fileContent);
-    
+  if (config) {
     // Migration: Ensure multi-mode items have parentCategory
-    // Use the Dual Mode threshold as a reference if available
     const dualThreshold = config.classifications.dual.threshold || 64.5;
     if (config.classifications.multi && config.classifications.multi.items) {
       config.classifications.multi.items = config.classifications.multi.items.map(item => {
@@ -120,28 +109,21 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
 
     configCache = config;
     cacheTimestamp = now;
-    
     return config;
-  } catch (error: any) {
-    console.error('Failed to load rainfall config:', error);
-    
-    // Return default config
-    const defaultConfig: RainfallConfig = {
->>>>>>> 13ab3c0 (final)
+  }
+
+  // 3. Last Resort: Default Config
+  const defaultConfig: RainfallConfig = {
       mode: 'dual',
       classifications: {
         dual: {
           enabled: true,
           threshold: 64.5,
-<<<<<<< HEAD
-          labels: { below: 'L', above: 'H' }
-=======
           heavyCodes: [5, 27, 33, 37, 45, 56],
           labels: {
             below: 'L',
             above: 'H'
           }
->>>>>>> 13ab3c0 (final)
         },
         multi: {
           enabled: false,
@@ -157,23 +139,10 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
       },
       lastUpdated: new Date().toISOString()
     };
-  }
-  
-  // Migration: Ensure multi-mode items have parentCategory and level
-  if (config.classifications.multi && config.classifications.multi.items) {
-    config.classifications.multi.items = config.classifications.multi.items.map((item, idx) => {
-      return {
-        ...item,
-        level: item.level || (idx + 1), // Fallback level if missing
-        parentCategory: item.parentCategory || (item.thresholdMm >= 64.5 ? 'HEAVY' : 'LOW')
-      };
-    });
-  }
-
-  configCache = config;
-  cacheTimestamp = now;
-  
-  return config;
+    
+    configCache = defaultConfig;
+    cacheTimestamp = now;
+    return defaultConfig;
 }
 
 /**

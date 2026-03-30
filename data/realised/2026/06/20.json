@@ -1,0 +1,31 @@
+{
+  "date": "2026-06-20",
+  "districts": {
+    "PALGHAR": 12.3,
+    "THANE": 12.3,
+    "MUMBAI": 5.5,
+    "RAIGAD": 25.8,
+    "RATNAGIRI": 5.5,
+    "SINDHUDURG": 25.8,
+    "DHULE": 12.3,
+    "NANDURBAR": 45.2,
+    "JALGAON": 45.2,
+    "NASHIK": null,
+    "AHMEDNAGAR": 25.8,
+    "PUNE": 67.8,
+    "KOLHAPUR": 45.2,
+    "SATARA": 5.5,
+    "SOUTH SATARA": 5.5,
+    "SANGLI": 5.5,
+    "SOLAPUR": 5.5,
+    "CHHATRAPATI SAMBHAJINAGAR": null,
+    "JALNA": null,
+    "PARBHANI": null,
+    "BEED": null,
+    "HINGOLI": 12.3,
+    "NANDED": 12.3,
+    "LATUR": 67.8,
+    "DHARASHIV": 12.3,
+    "NAGPUR": 12.3
+  }
+}

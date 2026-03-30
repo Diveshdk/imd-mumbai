@@ -71,51 +71,42 @@ export function normalizeDistrictName(name: string): string {
  * Monthly Rainfall Categories for CBAR (0 to 1500 mm)
  */
 export const MONTHLY_RAINFALL_CATEGORIES: RainfallCategory[] = [
-  { name: '0 - 150', color: '#edf8fb', min: 0, max: 150 },
-  { name: '150 - 300', color: '#ccece6', min: 151, max: 300 },
-  { name: '300 - 450', color: '#99d8c9', min: 301, max: 450 },
-  { name: '450 - 600', color: '#66c2a4', min: 451, max: 600 },
-  { name: '600 - 750', color: '#41ae76', min: 601, max: 750 },
-  { name: '750 - 900', color: '#238b45', min: 751, max: 900 },
-  { name: '900 - 1050', color: '#006d2c', min: 901, max: 1050 },
-  { name: '1050 - 1200', color: '#00441b', min: 1051, max: 1200 },
-  { name: '1200 - 1350', color: '#feb24c', min: 1201, max: 1350 },
-  { name: '1350 - 1500', color: '#f03b20', min: 1351, max: 1500 },
-  { name: '> 1500', color: '#bd0026', min: 1501, max: null },
+  { name: 'Very Low', color: '#E3F2FD', min: 0, max: 100 },
+  { name: 'Low', color: '#90CAF9', min: 101, max: 250 },
+  { name: 'Moderate', color: '#42A5F5', min: 251, max: 500 },
+  { name: 'High', color: '#1E88E5', min: 501, max: 750 },
+  { name: 'Very High', color: '#FDD835', min: 751, max: 1000 },
+  { name: 'Extreme', color: '#FB8C00', min: 1001, max: 1250 },
+  { name: 'Exceptional', color: '#E53935', min: 1251, max: 1500 },
+  { name: 'Ultra Extreme', color: '#B71C1C', min: 1501, max: null },
 ];
 
 /**
  * Get monthly color based on accumulated value
  */
 export function getMonthlyRainfallColor(value: number): string {
-  if (value <= 150) return '#edf8fb';
-  if (value <= 300) return '#ccece6';
-  if (value <= 450) return '#99d8c9';
-  if (value <= 600) return '#66c2a4';
-  if (value <= 750) return '#41ae76';
-  if (value <= 900) return '#238b45';
-  if (value <= 1050) return '#006d2c';
-  if (value <= 1200) return '#00441b';
-  if (value <= 1350) return '#feb24c';
-  if (value <= 1500) return '#f03b20';
-  return '#bd0026';
+  if (value <= 100) return '#E3F2FD';
+  if (value <= 250) return '#90CAF9';
+  if (value <= 500) return '#42A5F5';
+  if (value <= 750) return '#1E88E5';
+  if (value <= 1000) return '#FDD835';
+  if (value <= 1250) return '#FB8C00';
+  if (value <= 1500) return '#E53935';
+  return '#B71C1C';
 }
 
 /**
  * Get monthly category name based on accumulated value
  */
 export function getMonthlyRainfallCategory(value: number): string {
-  if (value <= 150) return '0 - 150 mm';
-  if (value <= 300) return '151 - 300 mm';
-  if (value <= 450) return '301 - 450 mm';
-  if (value <= 600) return '451 - 600 mm';
-  if (value <= 750) return '601 - 750 mm';
-  if (value <= 900) return '751 - 900 mm';
-  if (value <= 1050) return '901 - 1050 mm';
-  if (value <= 1200) return '1051 - 1200 mm';
-  if (value <= 1350) return '1201 - 1350 mm';
-  if (value <= 1500) return '1351 - 1500 mm';
-  return '> 1500 mm';
+  if (value <= 100) return 'Very Low';
+  if (value <= 250) return 'Low';
+  if (value <= 500) return 'Moderate';
+  if (value <= 750) return 'High';
+  if (value <= 1000) return 'Very High';
+  if (value <= 1250) return 'Extreme';
+  if (value <= 1500) return 'Exceptional';
+  return 'Ultra Extreme';
 }
 
 /**

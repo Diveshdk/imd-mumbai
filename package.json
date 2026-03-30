@@ -2,78 +2,22 @@
   "name": "imdmumbai",
   "version": "0.1.0",
   "private": true,
-  "main": "main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "next build && electron-builder"
-  },
-  "build": {
-    "appId": "com.imdmumbai.rainfall",
-    "productName": "IMD Mumbai Rainfall Analysis",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      ".next/**/*",
-      "main.js",
-      "package.json",
-      "data/**/*",
-      "public/**/*",
-      "utils/**/*",
-      "node_modules/**/*"
-    ],
-    "asar": true,
-    "asarUnpack": [
-      "**/node_modules/next/**/*",
-      "**/node_modules/.bin/next",
-      ".next/**/*",
-      "package.json",
-      "utils/**/*"
-    ],
-    "mac": {
-      "category": "public.app-category.weather",
-      "target": [
-        "dmg",
-        "zip"
-      ]
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        "portable"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ]
-    }
+    "lint": "eslint"
   },
   "dependencies": {
     "@vercel/kv": "^3.0.0",
     "autoprefixer": "^10.4.27",
-    "axios": "^1.14.0",
-    "body-parser": "^2.2.2",
     "chart.js": "^4.4.0",
-    "cors": "^2.8.6",
     "date-fns": "^3.2.0",
     "docx": "^8.5.0",
-    "express": "^5.2.1",
-    "form-data": "^4.0.5",
+    "electron-serve": "^3.0.1",
     "html2canvas": "^1.4.1",
     "js-cookie": "^3.0.5",
     "leaflet": "^1.9.4",
-    "multer": "^2.1.1",
     "next": "^16.1.6",
     "papaparse": "^5.4.1",
     "postcss": "^8.5.8",
@@ -93,16 +37,12 @@
     "@types/papaparse": "^5.3.14",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "concurrently": "^7.6.0",
-    "cross-spawn-promise": "^0.10.2",
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
-    "electron-serve": "^3.0.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "lucide-react": "^1.7.0",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5",
-    "wait-on": "^6.0.1"
+    "typescript": "^5"
   }
 }

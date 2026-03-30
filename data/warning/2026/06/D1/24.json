@@ -1,0 +1,32 @@
+{
+  "date": "2026-06-24",
+  "leadDay": "D1",
+  "districts": {
+    "PALGHAR": null,
+    "THANE": 7,
+    "MUMBAI": 5,
+    "RAIGAD": 12,
+    "RATNAGIRI": 7,
+    "SINDHUDURG": null,
+    "DHULE": 5,
+    "NANDURBAR": null,
+    "JALGAON": null,
+    "NASHIK": 8,
+    "AHMEDNAGAR": null,
+    "PUNE": null,
+    "KOLHAPUR": null,
+    "SATARA": 7,
+    "SOUTH SATARA": 5,
+    "SANGLI": null,
+    "SOLAPUR": 7,
+    "CHHATRAPATI SAMBHAJINAGAR": null,
+    "JALNA": null,
+    "PARBHANI": null,
+    "BEED": 5,
+    "HINGOLI": null,
+    "NANDED": null,
+    "LATUR": 8,
+    "DHARASHIV": null,
+    "NAGPUR": 8
+  }
+}
