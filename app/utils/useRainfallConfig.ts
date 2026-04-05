@@ -11,6 +11,7 @@ export interface DualModeConfig {
   enabled: boolean;
   threshold: number;
   heavyCodes: number[];
+  ocCodes: number[]; // Other Category codes — treated as LOW on backend, shown as 'OC' on frontend
   labels: {
     below: string;
     above: string;

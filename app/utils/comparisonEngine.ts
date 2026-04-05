@@ -71,15 +71,17 @@ function classifyRainfallValue(rainfall: number, config: any, dualThresholdOverr
 
 /**
  * Classify warning code using current mode (dual or multi)
- * Accepts an optional dualThresholdOverride - in dual mode, codes >= 5 map to heavy (same logic)
+ * In dual mode: heavyCodes -> labels.above (H), ocCodes -> 'OC', else -> labels.below (L)
  */
 function classifyWarningCode(code: number, config: any, dualThresholdOverride?: number, modeOverride?: 'dual' | 'multi'): string {
   const mode = modeOverride || config.mode;
   if (mode === 'dual') {
     const dual = config.classifications.dual;
-    // Use user-defined heavy codes if available, otherwise default to legacy >= 5
     const heavyCodes = dual.heavyCodes || [5, 27, 33, 37, 45, 56];
-    return heavyCodes.includes(code) ? dual.labels.above : dual.labels.below;
+    if (heavyCodes.includes(code)) return dual.labels.above;
+    const ocCodes = dual.ocCodes || [];
+    if (ocCodes.includes(code)) return 'OC';
+    return dual.labels.below;
   } else {
     const item = config.classifications.multi.items.find((i: any) => i.codes.includes(code));
     if (item) return item.variableName;
@@ -94,10 +96,13 @@ function classifyWarningCode(code: number, config: any, dualThresholdOverride?: 
  * Helper to get level and parent category from label
  * FIXED: accepts modeOverride so HRV-2 can force multi-mode resolution
  * even when global config.mode is 'dual'.
+ * NOTE: 'OC' is treated as LOW/level-1 for all skill-score math.
  */
 function getInfoForLabel(label: string, config: any, modeOverride?: 'dual' | 'multi'): { level: number; pc: 'LOW' | 'HEAVY' } {
   const mode = modeOverride || config.mode;
   if (mode === 'dual') {
+    // OC is treated identically to 'L' (LOW, level 1) for backend calculations
+    if (label === 'OC') return { level: 1, pc: 'LOW' };
     const isAbove = label === config.classifications.dual.labels.above;
     return {
       level: isAbove ? 2 : 1,

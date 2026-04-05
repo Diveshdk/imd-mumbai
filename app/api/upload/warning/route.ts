@@ -63,6 +63,40 @@ export async function POST(request: NextRequest) {
     // Check if file has the multi-sheet format (Day1, Day2, Day3, Day4, Day5)
     const requiredSheets = ['Day1', 'Day2', 'Day3', 'Day4', 'Day5'];
     const hasAllRequiredSheets = requiredSheets.every(sheet => sheetNames.includes(sheet));
+
+    // ── VALIDATION: check all codes against the allowed set ──────────────────
+    const { parseWarningSheet, parseMultiSheetWarningFile, validateWarningCodes } = await import('@/app/utils/warningSheetParser');
+
+    if (hasAllRequiredSheets) {
+      // Validate all 5 sheets
+      const multiSheetData = parseMultiSheetWarningFile(buffer, year, month);
+      for (const sheetData of Object.values(multiSheetData.sheets)) {
+        const invalidCodes = validateWarningCodes(sheetData as any);
+        if (invalidCodes.length > 0) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'invalid file, you may have uploaded some wrong file, upload the correct warning sheet'
+            },
+            { status: 400 }
+          );
+        }
+      }
+    } else {
+      // Validate single sheet
+      const parsedData = parseWarningSheet(buffer, year, month);
+      const invalidCodes = validateWarningCodes(parsedData);
+      if (invalidCodes.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'invalid file, you may have uploaded some wrong file, upload the correct warning sheet'
+          },
+          { status: 400 }
+        );
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
     
     let summary;
     let isMultiSheet = false;

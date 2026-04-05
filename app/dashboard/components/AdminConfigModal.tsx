@@ -16,6 +16,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
   const [editedConfig, setEditedConfig] = useState<RainfallConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingMode, setPendingMode] = useState<'dual' | 'multi' | null>(null);
   // Local string state for threshold inputs to allow free-form typing
@@ -346,6 +347,75 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
     toast.success(`Code ${code} removed`);
   };
 
+  const handleAddOcCode = (code: number) => {
+    if (!editedConfig) return;
+
+    const currentOcCodes = editedConfig.classifications.dual.ocCodes || [];
+    const currentHeavyCodes = editedConfig.classifications.dual.heavyCodes || [];
+
+    if (currentOcCodes.includes(code)) {
+      toast.error(`Code ${code} already exists in OC category`);
+      return;
+    }
+    if (currentHeavyCodes.includes(code)) {
+      toast.error(`Code ${code} is already in the Heavy category — remove it there first`);
+      return;
+    }
+
+    const newCodes = [...currentOcCodes, code].sort((a, b) => a - b);
+    setEditedConfig({
+      ...editedConfig,
+      classifications: {
+        ...editedConfig.classifications,
+        dual: {
+          ...editedConfig.classifications.dual,
+          ocCodes: newCodes
+        }
+      }
+    });
+    toast.success(`Code ${code} added to OC category`);
+  };
+
+  const handleRemoveOcCode = (code: number) => {
+    if (!editedConfig) return;
+
+    const currentCodes = editedConfig.classifications.dual.ocCodes || [];
+    const newCodes = currentCodes.filter(c => c !== code);
+    setEditedConfig({
+      ...editedConfig,
+      classifications: {
+        ...editedConfig.classifications,
+        dual: {
+          ...editedConfig.classifications.dual,
+          ocCodes: newCodes
+        }
+      }
+    });
+    toast.success(`Code ${code} removed from OC category`);
+  };
+
+  const handleClearCache = async () => {
+    setIsClearingCache(true);
+    try {
+      const response = await fetch('/api/admin/clear-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'admin123' })
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success('Cache cleared! The website will now serve fresh data.');
+      } else {
+        toast.error(result.error || 'Failed to clear cache');
+      }
+    } catch (error: any) {
+      toast.error('Failed to clear cache: ' + error.message);
+    } finally {
+      setIsClearingCache(false);
+    }
+  };
+
+
   const handleAddDualCode = (code: number) => {
     if (!editedConfig) return;
 
@@ -353,6 +423,13 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
     
     if (currentCodes.includes(code)) {
       toast.error(`Code ${code} already exists in Heavy category`);
+      return;
+    }
+
+    // Ensure the code isn't already in OC category
+    const ocCodes = editedConfig.classifications.dual.ocCodes || [];
+    if (ocCodes.includes(code)) {
+      toast.error(`Code ${code} is already in the OC category — remove it there first`);
       return;
     }
 
@@ -389,6 +466,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
     });
     toast.success(`Code ${code} removed from Heavy category`);
   };
+
 
 
 
@@ -660,6 +738,79 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
                           </p>
                         </div>
                       </div>
+                      {/* OC (Other Category) Codes */}
+                      <div className="bg-white rounded-lg p-4 border border-purple-200 mt-4">
+                        <p className="text-sm font-semibold text-gray-900 mb-1">
+                          Other Category (OC) Codes:
+                        </p>
+                        <p className="text-xs text-purple-700 mb-3 italic">
+                          These codes are treated as <strong>Less Rainfall</strong> on the backend (skill scores), but displayed as <strong>OC</strong> in the verification sheet frontend.
+                        </p>
+                        <div className="space-y-4">
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              id="oc-code-input"
+                              placeholder="Enter OC code"
+                              className="flex-1 px-3 py-2 border border-purple-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const input = e.currentTarget;
+                                  const code = parseInt(input.value);
+                                  if (!isNaN(code)) {
+                                    handleAddOcCode(code);
+                                    input.value = '';
+                                  }
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                const input = document.getElementById('oc-code-input') as HTMLInputElement;
+                                if (input) {
+                                  const code = parseInt(input.value);
+                                  if (!isNaN(code)) {
+                                    handleAddOcCode(code);
+                                    input.value = '';
+                                  }
+                                }
+                              }}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-md transition-colors shadow-sm"
+                            >
+                              Add
+                            </button>
+                          </div>
+
+                          <div className="min-h-[80px] border border-gray-100 rounded-md p-3 bg-gray-50">
+                            <div className="flex flex-wrap gap-2">
+                              {(editedConfig.classifications.dual.ocCodes || []).map((code) => (
+                                <div
+                                  key={code}
+                                  className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 border border-purple-200 text-purple-700 rounded-md text-xs font-semibold shadow-sm"
+                                >
+                                  <span>{code}</span>
+                                  <button
+                                    onClick={() => handleRemoveOcCode(code)}
+                                    className="hover:text-purple-900 transition-colors p-0.5"
+                                    title="Remove OC code"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                              {(editedConfig.classifications.dual.ocCodes || []).length === 0 && (
+                                <p className="text-xs text-gray-400 italic py-2">No OC codes added. All non-Heavy codes will be classified as 'Less'.</p>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-gray-500 italic">
+                            OC codes appear as <strong>OC</strong> in the verification sheet but count as Less for skill scores (POD/FAR/CSI/BIAS).
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -853,33 +1004,58 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-gray-200">
+                  {/* Left: Cache */}
                   <button
-                    onClick={handleCancel}
-                    disabled={isSaving}
-                    className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    onClick={handleClearCache}
+                    disabled={isClearingCache || isSaving}
+                    className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-md transition-colors disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+                    title="Clear server-side cache so the website fetches fresh data from disk"
                   >
-                    Cancel Changes
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {isSaving ? (
+                    {isClearingCache ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Saving...
+                        Clearing...
                       </>
                     ) : (
                       <>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
-                        Save Configuration
+                        Clear Website Cache
                       </>
                     )}
                   </button>
+
+                  {/* Right: Cancel + Save */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleCancel}
+                      disabled={isSaving}
+                      className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    >
+                      Cancel Changes
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {isSaving ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Save Configuration
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null}

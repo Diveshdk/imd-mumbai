@@ -7,6 +7,30 @@
 import * as XLSX from 'xlsx';
 import { getDaysInMonth } from './dateUtils';
 
+/**
+ * Valid IMD warning codes that are allowed in uploaded files.
+ * Any other non-null code will cause the upload to be rejected.
+ */
+export const VALID_WARNING_CODES: ReadonlySet<number> = new Set([
+  1, 4, 5, 8, 9, 12, 13, 14, 15, 16, 17, 21, 24, 25, 26, 27, 28, 29, 37, 44
+]);
+
+/**
+ * Validate that all non-null codes in the parsed warning data belong
+ * to the allowed set. Returns the list of invalid codes found.
+ */
+export function validateWarningCodes(parsedData: ParsedWarningData): number[] {
+  const invalidCodes: Set<number> = new Set();
+  for (const row of parsedData.rows) {
+    for (const value of Object.values(row.dailyValues)) {
+      if (value !== null && value !== undefined && !VALID_WARNING_CODES.has(value)) {
+        invalidCodes.add(value);
+      }
+    }
+  }
+  return Array.from(invalidCodes).sort((a, b) => a - b);
+}
+
 export interface WarningSheetRow {
   district: string;
   dailyValues: { [day: number]: number | null };

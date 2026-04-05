@@ -135,11 +135,36 @@ export async function POST(request: NextRequest) {
       } else {
         for (const code of dual.heavyCodes) {
           if (!Number.isInteger(code) || code < 0) {
-            errors.push(`Dual Mode: Code ${code} must be a non-negative integer`);
+            errors.push(`Dual Mode: Heavy code ${code} must be a non-negative integer`);
           }
         }
       }
+
+      // Validate ocCodes (optional, default empty)
+      if (dual.ocCodes !== undefined && dual.ocCodes !== null) {
+        if (!Array.isArray(dual.ocCodes)) {
+          errors.push("Dual Mode: ocCodes must be an array");
+        } else {
+          for (const code of dual.ocCodes) {
+            if (!Number.isInteger(code) || code < 0) {
+              errors.push(`Dual Mode: OC code ${code} must be a non-negative integer`);
+            }
+          }
+          // Ensure no overlap between heavyCodes and ocCodes
+          if (Array.isArray(dual.heavyCodes)) {
+            const heavySet = new Set(dual.heavyCodes);
+            const overlapping = (dual.ocCodes as number[]).filter((c: number) => heavySet.has(c));
+            if (overlapping.length > 0) {
+              errors.push(`Dual Mode: Codes [${overlapping.join(', ')}] cannot be in both Heavy and OC categories`);
+            }
+          }
+        }
+      } else {
+        // Ensure ocCodes is always initialized
+        config.classifications.dual.ocCodes = [];
+      }
     }
+
     
     if (errors.length > 0) {
       return NextResponse.json(

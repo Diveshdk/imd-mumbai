@@ -13,6 +13,7 @@ export interface DualModeConfig {
   enabled: boolean;
   threshold: number;
   heavyCodes: number[];
+  ocCodes: number[]; // Other Category codes — treated as LOW on backend, shown as 'OC' on frontend
   labels: {
     below: string;
     above: string;
@@ -107,6 +108,11 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
       config.classifications.dual.heavyCodes = [5, 27, 33, 37, 45, 56]; // Default heavy codes
     }
 
+    // Migration: Ensure dual-mode has ocCodes
+    if (!config.classifications.dual.ocCodes) {
+      config.classifications.dual.ocCodes = [];
+    }
+
     configCache = config;
     cacheTimestamp = now;
     return config;
@@ -120,6 +126,7 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
           enabled: true,
           threshold: 64.5,
           heavyCodes: [5, 27, 33, 37, 45, 56],
+          ocCodes: [],
           labels: {
             below: 'L',
             above: 'H'
@@ -237,14 +244,18 @@ export async function classifyRainfall(rainfall: number): Promise<string> {
 
 /**
  * Classify warning code in DUAL MODE
- * Uses config-based logic to match rainfall classification behavior
- * Codes >= 5 typically indicate heavy rainfall (>= 64.5mm threshold)
+ * Uses config-based logic:
+ *   - heavyCodes → labels.above (H)
+ *   - ocCodes → 'OC' (displayed as OC in frontend, treated as LOW on backend)
+ *   - Everything else → labels.below (L)
  */
 export function classifyCodeInDualMode(code: number, config: RainfallConfig): string {
   const dualConfig = config.classifications.dual;
-  // Use user-defined heavy codes if available, otherwise default to legacy >= 5
   const heavyCodes = dualConfig.heavyCodes || [5, 27, 33, 37, 45, 56];
-  return heavyCodes.includes(code) ? dualConfig.labels.above : dualConfig.labels.below;
+  if (heavyCodes.includes(code)) return dualConfig.labels.above;
+  const ocCodes = dualConfig.ocCodes || [];
+  if (ocCodes.includes(code)) return 'OC';
+  return dualConfig.labels.below;
 }
 
 /**
@@ -340,11 +351,14 @@ export async function getPublicClassificationInfo(): Promise<{
 }
 /**
  * Get the numeric level of a classification label
+ * OC is treated as level 1 (same as Less/L) for backend skill-score math
  */
 export async function getLevelByLabel(label: string): Promise<number> {
   const config = await loadRainfallConfig();
   
   if (config.mode === 'dual') {
+    // OC is treated as LOW (level 1) for skill score purposes
+    if (label === 'OC') return 1;
     return label === config.classifications.dual.labels.above ? 2 : 1;
   } else {
     const item = config.classifications.multi.items.find(i => i.variableName === label);
@@ -353,11 +367,14 @@ export async function getLevelByLabel(label: string): Promise<number> {
 }
 /**
  * Get the parent category (LOW/HEAVY) of a classification label
+ * OC is treated as LOW for backend skill-score math
  */
 export async function getParentCategoryByLabel(label: string): Promise<'LOW' | 'HEAVY'> {
   const config = await loadRainfallConfig();
   
   if (config.mode === 'dual') {
+    // OC is treated as LOW for skill score purposes
+    if (label === 'OC') return 'LOW';
     return label === config.classifications.dual.labels.above ? 'HEAVY' : 'LOW';
   } else {
     const item = config.classifications.multi.items.find(i => i.variableName === label);
