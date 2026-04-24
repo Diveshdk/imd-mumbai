@@ -46,26 +46,9 @@ export function getRainfallCategory(value: number): string {
   return 'Extremely Heavy Rain';
 }
 
-/**
- * District name mapping for administrative changes
- */
-export const DISTRICT_NAME_MAPPING: Record<string, string> = {
-  'AHILYANAGAR': 'AHMADNAGAR',
-  'CHHATRAPATI SAMBHAJI NAGAR': 'AURANGABAD',
-  'CHATRAPATI SAMBHAJI NAGAR': 'AURANGABAD',
-  'DHARASHIV': 'OSMANABAD',
-  'RAIGAD': 'RAIGARH',
-  'SHOLAPUR': 'SOLAPUR',
-  'BEED': 'BID',
-};
+export { normalizeDistrictName } from './districtNormalizer';
 
-/**
- * Normalize district name for matching
- */
-export function normalizeDistrictName(name: string): string {
-  const normalized = name.trim().toUpperCase();
-  return DISTRICT_NAME_MAPPING[normalized] || normalized;
-}
+
 
 /**
  * Monthly Rainfall Categories for CBAR (0 to 1500 mm)
@@ -110,17 +93,46 @@ export function getMonthlyRainfallCategory(value: number): string {
 }
 
 /**
- * Get color based on rainfall value using fixed 100mm bands
- * Matches the map legend: 0-100, 100-200, ..., >900
+ * Get continuous color based on rainfall value using linear interpolation
+ */
+export function getRainfallColorContinuous(rainfall: number): string {
+  if (rainfall === 0) return '#D3D3D3';
+  
+  const stops = [
+    { threshold: 0.1, color: [225, 245, 254] },   // #E1F5FE
+    { threshold: 2.5, color: [255, 255, 224] },   // #FFFFE0
+    { threshold: 15.6, color: [255, 255, 0] },    // #FFFF00
+    { threshold: 64.5, color: [255, 165, 0] },    // #FFA500
+    { threshold: 115.6, color: [255, 0, 0] },     // #FF0000
+    { threshold: 204.5, color: [139, 0, 0] },     // #8B0000
+  ];
+
+  if (rainfall < stops[0].threshold) return `rgb(${stops[0].color.join(',')})`;
+  if (rainfall >= stops[stops.length - 1].threshold) return `rgb(${stops[stops.length - 1].color.join(',')})`;
+
+  for (let i = 0; i < stops.length - 1; i++) {
+    const s1 = stops[i];
+    const s2 = stops[i + 1];
+    if (rainfall >= s1.threshold && rainfall < s2.threshold) {
+      const range = s2.threshold - s1.threshold;
+      const weight = (rainfall - s1.threshold) / range;
+      
+      const r = Math.round(s1.color[0] + (s2.color[0] - s1.color[0]) * weight);
+      const g = Math.round(s1.color[1] + (s2.color[1] - s1.color[1]) * weight);
+      const b = Math.round(s1.color[2] + (s2.color[2] - s1.color[2]) * weight);
+      
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  }
+
+  return '#D3D3D3';
+}
+
+/**
+ * Get color based on rainfall value using smooth continuous scale
  */
 export function getRainfallColorDynamic(rainfall: number, config?: any): string {
-  if (rainfall === 0) return '#D3D3D3';
-  if (rainfall <= 2.4) return '#E1F5FE';
-  if (rainfall <= 15.5) return '#FFFFE0';
-  if (rainfall <= 64.4) return '#FFFF00';
-  if (rainfall <= 115.5) return '#FFA500';
-  if (rainfall <= 204.4) return '#FF0000';
-  return '#8B0000';
+  return getRainfallColorContinuous(rainfall);
 }
 
 /**
@@ -129,11 +141,11 @@ export function getRainfallColorDynamic(rainfall: number, config?: any): string 
 export function getRainfallCategoryDynamic(rainfall: number, config: any): string {
   if (rainfall === 0) return 'No Rainfall';
 
-  if (config.mode === 'dual') {
+  if (config?.mode === 'dual') {
     const dual = config.classifications.dual;
-    return rainfall >= dual.threshold ? dual.labels.above : dual.labels.below;
+    return rainfall >= (dual?.threshold || 64.5) ? dual?.labels?.above || 'Heavy' : dual?.labels?.below || 'Light/No';
   } else {
-    const items = [...config.classifications.multi.items]
+    const items = [...(config?.classifications?.multi?.items || [])]
       .filter(i => i.enabled)
       .sort((a, b) => b.thresholdMm - a.thresholdMm);
     

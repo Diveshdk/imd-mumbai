@@ -62,9 +62,21 @@ interface DistrictDetail {
   totals: { H: number; M: number; F: number; CN: number; POD: number; FAR: number; CSI: number; Bias: number };
 }
 
-export default function HeavyRainfallVerificationTab() {
-  const [startDate, setStartDate] = useState<string>('2025-06-01');
-  const [endDate, setEndDate] = useState<string>('2025-06-30');
+interface HeavyRainfallVerificationTabProps {
+  mode?: 'dual' | 'multi';
+  startDate: string;
+  setStartDate: (date: string) => void;
+  endDate: string;
+  setEndDate: (date: string) => void;
+}
+
+export default function HeavyRainfallVerificationTab({ 
+  mode = 'dual', 
+  startDate, 
+  setStartDate, 
+  endDate, 
+  setEndDate 
+}: HeavyRainfallVerificationTabProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [overviewResults, setOverviewResults] = useState<OverviewResults | null>(null);
   const [detailedResults, setDetailedResults] = useState<DetailedResults | null>(null);
@@ -82,7 +94,11 @@ export default function HeavyRainfallVerificationTab() {
       const response = await fetch('/api/verification/heavy-rainfall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startDate, endDate })
+        body: JSON.stringify({ 
+          startDate, 
+          endDate, 
+          configMode: mode 
+        })
       });
       const result = await response.json();
       if (result.success) {
@@ -107,7 +123,12 @@ export default function HeavyRainfallVerificationTab() {
       const response = await fetch('/api/verification/heavy-rainfall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startDate, endDate, selectedDay: day })
+        body: JSON.stringify({ 
+          startDate, 
+          endDate, 
+          selectedDay: day, 
+          configMode: mode 
+        })
       });
       const result = await response.json();
       if (result.success) {
@@ -130,7 +151,13 @@ export default function HeavyRainfallVerificationTab() {
       const response = await fetch('/api/verification/heavy-rainfall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startDate, endDate, selectedDay, selectedDistrict: district })
+        body: JSON.stringify({ 
+          startDate, 
+          endDate, 
+          selectedDay, 
+          selectedDistrict: district, 
+          configMode: mode 
+        })
       });
       const result = await response.json();
       if (result.success) {
@@ -222,7 +249,7 @@ export default function HeavyRainfallVerificationTab() {
               <div>
                 <span className="text-gray-600">Threshold/Method:</span>
                 <span className="ml-2 font-semibold text-gray-900">
-                  {config?.mode === 'multi' ? 'Multi-Category' : `${overviewResults.threshold}mm`}
+                  {mode === 'multi' ? 'Multi-Category' : `${overviewResults.threshold}mm`}
                 </span>
               </div>
               <div>
@@ -237,8 +264,8 @@ export default function HeavyRainfallVerificationTab() {
               </div>
               <div>
                 <span className="text-gray-600">Mode:</span>
-                <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${config?.mode === 'multi' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {configLoading ? 'Loading...' : (config?.mode === 'multi' ? 'Categorical (Multi)' : 'Binary (Dual)')}
+                <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${mode === 'multi' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {configLoading ? 'Loading...' : (mode === 'multi' ? 'Categorical (Multi)' : 'Binary (Dual)')}
                 </span>
               </div>
             </div>
@@ -256,7 +283,7 @@ export default function HeavyRainfallVerificationTab() {
                     try {
                       const excelData: any[][] = [];
                       excelData.push(['Heavy Rainfall Verification (HRV-1) - Overview']);
-                      excelData.push([`Verification Mode: ${config?.mode === 'multi' ? 'Multi-Category' : 'Dual (Binary)'}`]);
+                      excelData.push([`Verification Mode: ${mode === 'multi' ? 'Multi-Category' : 'Dual (Binary)'}`]);
                       excelData.push([`Date Range: ${startDate} to ${endDate}`]);
                       excelData.push([]);
                       excelData.push(['Day', 'Hit (H)', 'Miss (M)', 'False Alarm (F)', 'CN', 'Total', 'POD=H/(H+M)', 'CSI=H/(H+M+F)', 'FAR=F/(H+F)', 'BIAS=(H+F)/(H+M)']);

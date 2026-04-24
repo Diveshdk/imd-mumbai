@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { toast } from 'react-hot-toast';
 import { useRainfallConfig } from '@/app/utils/useRainfallConfig';
 import { MONTHLY_RAINFALL_CATEGORIES, RAINFALL_CATEGORIES } from '@/app/utils/rainfallColors';
-import { downloadChartAsImage } from '@/app/utils/chartDownloadUtils';
+import { downloadLeafletMap } from '@/app/utils/mapExportUtils';
 
 // Dynamically import the map component to avoid SSR issues with Leaflet
 const MapVisualization = dynamic(() => import('@/app/dashboard/components/MapVisualization'), {
@@ -36,10 +36,22 @@ interface DistrictRainfall {
 
 const VERIFICATION_METRICS = ['pod', 'far', 'bias', 'csi', 'accuracy'] as const;
 
-export default function MapAnalysisTab() {
+interface MapAnalysisTabProps {
+  mode?: 'dual' | 'multi';
+  selectedDate: string | null;
+  setSelectedDate: (date: string | null) => void;
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+}
+
+export default function MapAnalysisTab({ 
+  mode = 'dual', 
+  selectedDate, 
+  setSelectedDate,
+  selectedMonth,
+  setSelectedMonth
+}: MapAnalysisTabProps) {
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [rainfallData, setRainfallData] = useState<DistrictRainfall[]>([]);
   const [metric, setMetric] = useState<'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision' | 'accuracy'>('rainfall');
   const [metricData, setMetricData] = useState<Record<string, any>>({});
@@ -53,9 +65,9 @@ export default function MapAnalysisTab() {
   
   const { config } = useRainfallConfig();
 
-  // Derive available multi-mode categories
-  const multiCategories = config?.mode === 'multi'
-    ? (config.classifications.multi.items || [])
+  // Derive available multi-mode categories — use the prop 'mode' instead of global config.mode
+  const multiCategories = mode === 'multi'
+    ? (config?.classifications?.multi?.items || [])
         .filter((i: any) => i.enabled)
         .sort((a: any, b: any) => a.order - b.order)
     : [];
@@ -136,7 +148,12 @@ export default function MapAnalysisTab() {
   const fetchMetricData = async (startDate: string, endDate: string, leadDay: string) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({ startDate, endDate, leadDay });
+      const params = new URLSearchParams({ 
+        startDate, 
+        endDate, 
+        leadDay,
+        mode // Pass the user's specific mode to the API
+      });
 
       // If in multi-mode and a category is selected, pass it for per-category stats
       const isVerificationMetric = VERIFICATION_METRICS.includes(metric as any);
@@ -207,22 +224,30 @@ export default function MapAnalysisTab() {
         );
       }
 
+      const stops = [
+        { pos: '0%', color: '#D3D3D3', val: '0' },
+        { pos: '14.2%', color: '#E1F5FE', val: '2.5' },
+        { pos: '28.5%', color: '#FFFFE0', val: '15.6' },
+        { pos: '42.8%', color: '#FFFF00', val: '64.5' },
+        { pos: '57.1%', color: '#FFA500', val: '115.6' },
+        { pos: '71.4%', color: '#FF0000', val: '204.5' },
+        { pos: '100%', color: '#8B0000', val: 'Max' }
+      ];
+
       return (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          {RAINFALL_CATEGORIES.map((cat) => (
-            <div key={cat.name} className="flex items-center gap-2">
-              <div 
-                className="w-5 h-5 rounded border border-gray-300 flex-shrink-0" 
-                style={{ backgroundColor: cat.color }} 
-              />
-              <div className="flex flex-col">
-                <span className="text-[11px] font-bold text-gray-900 leading-tight">{cat.name}</span>
-                <span className="text-[10px] text-gray-600 font-medium">
-                  {cat.max === 0 ? '0 mm' : cat.max === null ? `> ${cat.min} mm` : `${cat.min}-${cat.max} mm`}
-                </span>
+        <div className="space-y-6">
+          <div className="relative w-full h-8 rounded-lg shadow-inner overflow-hidden border border-gray-200"
+               style={{ background: `linear-gradient(to right, ${stops.map(s => s.color).join(', ')})` }}>
+          </div>
+          <div className="relative w-full h-6">
+            {stops.map((stop, idx) => (
+              <div key={idx} className="absolute top-0 text-[10px] font-bold text-gray-700 -translate-x-1/2"
+                   style={{ left: stop.pos }}>
+                {stop.val}
               </div>
-            </div>
-          ))}
+            ))}
+            <div className="absolute right-0 top-6 text-[10px] text-gray-500 italic mt-1">Daily Rainfall in mm</div>
+          </div>
         </div>
       );
     }
@@ -292,11 +317,25 @@ export default function MapAnalysisTab() {
             </button>
           )}
           <button
-            onClick={() => downloadChartAsImage('map-visualization-container', `Maharashtra_Map_${metric}`)}
+            onClick={async () => {
+              try {
+                const period = viewMode === 'daily' ? selectedDate : selectedMonth;
+                const metricLabel = metric === 'rainfall'
+                  ? (viewMode === 'daily' ? `Rainfall: ${selectedDate}` : `Rainfall: ${selectedMonth}`)
+                  : metric.toUpperCase();
+                await downloadLeafletMap(
+                  'map-visualization-container',
+                  `Maharashtra_Map_${metric}_${period}`,
+                  { title: `Maharashtra — ${metricLabel}`, subtitle: `Generated: ${new Date().toLocaleString('en-IN')}` }
+                );
+              } catch (e: any) {
+                toast.error('Download failed: ' + e.message);
+              }
+            }}
             className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow hover:bg-blue-700 transition flex items-center gap-2 cursor-pointer"
           >
             <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            <span>Download PDF/PNG</span>
+            <span>Download PNG</span>
           </button>
         </div>
       </div>
@@ -323,11 +362,11 @@ export default function MapAnalysisTab() {
             <div>
               <label className="block text-xs font-bold text-black uppercase mb-2">Classification Mode</label>
               <div className={`px-3 py-2 border rounded-md text-sm font-bold ${
-                config?.mode === 'multi' 
+                mode === 'multi' 
                   ? 'bg-purple-50 border-purple-300 text-purple-700' 
                   : 'bg-blue-50 border-blue-300 text-blue-700'
               }`}>
-                {config?.mode === 'multi' ? '🔵 Multi (Categorical)' : '⚪ Dual (Binary)'}
+                {mode === 'multi' ? '🔵 Multi (Categorical)' : '⚪ Dual (Binary)'}
               </div>
               <p className="text-[10px] text-gray-400 mt-1">Set in Admin Panel only</p>
             </div>
@@ -340,7 +379,7 @@ export default function MapAnalysisTab() {
             {viewMode === 'daily' ? (
               <input
                 type="date"
-                value={selectedDate}
+                value={selectedDate || ''}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-400 rounded-md text-sm text-black font-semibold"
               />
@@ -378,9 +417,11 @@ export default function MapAnalysisTab() {
             </div>
           </div>
 
-          {metric !== 'rainfall' && metric !== 'subdivision' && (
+          {(metric !== 'rainfall' && metric !== 'subdivision' || canShowResearchPanel) && (
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Lead Time</label>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
+                Lead Time {canShowResearchPanel && metric === 'rainfall' && <span className="text-indigo-500 normal-case font-normal">(used by Research Panel)</span>}
+              </label>
               <div className="flex gap-2">
                 {['D1', 'D2', 'D3', 'D4', 'D5'].map((d) => (
                   <button
@@ -400,7 +441,7 @@ export default function MapAnalysisTab() {
           )}
 
           {/* Category selector — only in multi-mode, for verification metrics */}
-          {config?.mode === 'multi' && VERIFICATION_METRICS.includes(metric as any) && multiCategories.length > 0 && (
+          {mode === 'multi' && VERIFICATION_METRICS.includes(metric as any) && multiCategories.length > 0 && (
             <div>
               <label className="block text-xs font-bold text-purple-700 uppercase mb-2">
                 🔵 Category (Multi-Mode)
@@ -441,7 +482,7 @@ export default function MapAnalysisTab() {
             "Displaying districts grouped by IMD Meteorological Subdivisions."
           ) : (
             `Displaying ${metric.toUpperCase()} verification scores for ${leadDay} forecasts.${
-              config?.mode === 'multi' && selectedCategory
+              mode === 'multi' && selectedCategory
                 ? ` Category filter: "${selectedCategory}" (binary event per district).`
                 : ' Metric values shown on each district.'
             }`
@@ -450,21 +491,22 @@ export default function MapAnalysisTab() {
       </div>
 
       {/* Research Panel (5-Map Grid) */}
-      {showResearchPanel && researchRange && (
-        <MultiMapPanel
-          startDate={researchRange.start}
-          endDate={researchRange.end}
-          leadDay={leadDay}
-          viewMode={viewMode}
-          selectedDate={selectedDate}
-          selectedMonth={selectedMonth}
-          selectedCategory={selectedCategory}
-          configMode={config?.mode || 'dual'}
-          onClose={() => setShowResearchPanel(false)}
-        />
+      {showResearchPanel && (
+        <div className="mt-8">
+          <MultiMapPanel
+            startDate={researchRange?.start || ''}
+            endDate={researchRange?.end || ''}
+            leadDay={leadDay}
+            viewMode={viewMode}
+            selectedDate={selectedDate}
+            selectedMonth={selectedMonth}
+            selectedCategory={selectedCategory}
+            configMode={mode}
+            onClose={() => setShowResearchPanel(false)}
+          />
+        </div>
       )}
 
-      {/* Single-Map Container */}
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <MapVisualization 
           rainfallData={rainfallData} 
@@ -473,7 +515,8 @@ export default function MapAnalysisTab() {
           selectedMonth={selectedMonth}
           metric={metric}
           metricData={metricData}
-          interactive={false}
+          interactive={true}
+          mode={mode}
         />
       </div>
 

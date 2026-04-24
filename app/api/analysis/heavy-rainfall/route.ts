@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
       selectedDay, 
       threshold = config.classifications.dual.threshold, 
       startDate, 
-      endDate 
+      endDate,
+      configMode
     } = body;
 
     // Validate inputs
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       }
 
       const leadDayCode = selectedDay; // Already in format "D1", "D2", etc.
-      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold);
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold, configMode);
       
       // Calculate district-wise statistics
       const districtStats = getDistrictWiseAccuracy(comparisons);
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
       const days: any = {};
 
       for (const leadDay of leadDays) {
-        const comparisons = await compareForDateRange(startDate, endDate, leadDay, threshold);
+        const comparisons = await compareForDateRange(startDate, endDate, leadDay, threshold, configMode);
         const aggregateStats = calculateAccuracy(comparisons);
 
         days[leadDay] = {

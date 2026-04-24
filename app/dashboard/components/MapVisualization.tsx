@@ -6,12 +6,14 @@ import {
   getRainfallColor,
   getRainfallColorDynamic, 
   getRainfallCategory, 
+  getRainfallCategoryDynamic,
   getMonthlyRainfallColor,
   getMonthlyRainfallCategory,
-  normalizeDistrictName, 
   findDistrictColumn 
 } from '@/app/utils/rainfallColors';
+import { MAHARASHTRA_SUBDIVISIONS, normalizeDistrictName } from '@/app/utils/districtNormalizer';
 import { useRainfallConfig } from '@/app/utils/useRainfallConfig';
+
 
 interface DistrictRainfall {
   district: string;
@@ -23,7 +25,7 @@ interface DistrictRainfall {
 interface MapVisualizationProps {
   rainfallData: DistrictRainfall[];
   viewMode: 'daily' | 'monthly';
-  selectedDate: string;
+  selectedDate: string | null;
   selectedMonth: string;
   metric?: 'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision' | 'accuracy';
   metricData?: Record<string, any>;
@@ -31,33 +33,14 @@ interface MapVisualizationProps {
   interactive?: boolean;
   /** If true, shows a short metric label instead of full heading text. Default: false */
   compact?: boolean;
+  /** Explicit mode override: 'dual' or 'multi' */
+  mode?: 'dual' | 'multi';
 }
 
-// Maharashtra Meteorological Subdivisions
-const MAHARASHTRA_SUBDIVISIONS = [
-  {
-    name: 'Konkan',
-    color: '#6366f1',
-    cities: ['MUMBAI', 'MUMBAI SUBURBAN', 'THANE', 'PALGHAR', 'RAIGAD', 'RATNAGIRI', 'SINDHUDURG']
-  },
-  {
-    name: 'South Madhya Maharashtra',
-    color: '#10b981',
-    cities: ['PUNE', 'SATARA', 'SANGLI', 'KOLHAPUR', 'SOLAPUR']
-  },
-  {
-    name: 'North Madhya Maharashtra',
-    color: '#f59e0b',
-    cities: ['NASHIK', 'DHULE', 'JALGAON', 'NANDURBAR', 'AHMEDNAGAR']
-  },
-  {
-    name: 'Marathwada',
-    color: '#ef4444',
-    cities: ['CHHATRAPATI SAMBHAJI NAGAR', 'AURANGABAD', 'JALNA', 'BEED', 'LATUR', 'OSMANABAD', 'NANDED', 'HINGOLI', 'PARBHANI']
-  }
-];
 
-// Component to fit bounds when data changes
+/**
+ * FitBounds component
+ */
 function FitBounds({ geoJsonData }: { geoJsonData: any }) {
   const map = useMap();
 
@@ -179,6 +162,7 @@ export default function MapVisualization({
   metricData = {},
   interactive = true,
   compact = false,
+  mode,
 }: MapVisualizationProps) {
   const [geoJsonData, setGeoJsonData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -285,12 +269,12 @@ export default function MapVisualization({
     let color = '#D3D3D3';
 
     if (metric === 'rainfall') {
-      const rainfall = rainfallMap.get(districtNorm)?.rainfall || 0;
-      if (viewMode === 'daily') {
-        color = getRainfallColor(rainfall);
-      } else {
-        color = getMonthlyRainfallColor(rainfall);
-      }
+      const val = rainfallMap.get(districtNorm)?.rainfall || 0;
+      const effectiveMode = mode || config?.mode || 'dual';
+      color = getRainfallColorDynamic(val, { 
+        mode: effectiveMode, 
+        classifications: config?.classifications 
+      });
     } else if (metric === 'subdivision') {
       color = getMetricColor(districtNorm, 0);
     } else {
@@ -324,13 +308,17 @@ export default function MapVisualization({
 
     if (metric === 'rainfall') {
       const data = rainfallMap.get(districtNorm);
-      const rainfall = data?.rainfall || 0;
-      const category = viewMode === 'daily' ? getRainfallCategory(rainfall) : getMonthlyRainfallCategory(rainfall);
+      const val = data?.rainfall || 0;
+      const effectiveMode = mode || config?.mode || 'dual';
+      const category = getRainfallCategoryDynamic(val, { 
+        mode: effectiveMode, 
+        classifications: config?.classifications 
+      });
       
       if (viewMode === 'daily') {
-        tooltipContent += `Rainfall: <strong>${rainfall.toFixed(1)} mm</strong><br/>Category: <em>${category}</em>`;
+        tooltipContent += `Rainfall: <strong>${val.toFixed(1)} mm</strong><br/>Category: <em>${category}</em>`;
       } else {
-        tooltipContent += `Total accumulation: <strong>${rainfall.toFixed(1)} mm</strong><br/>Category: <em>${category}</em><br/>`;
+        tooltipContent += `Total accumulation: <strong>${val.toFixed(1)} mm</strong><br/>Category: <em>${category}</em><br/>`;
         if (data?.maxRainfallValue !== undefined && data?.maxRainfallDate) {
           tooltipContent += `Max rainfall: <strong>${data.maxRainfallValue.toFixed(1)} mm</strong> on <strong>${data.maxRainfallDate}</strong>`;
         } else if (data?.maxRainfallDate) {
@@ -372,7 +360,8 @@ export default function MapVisualization({
         if (viewMode === 'monthly') {
           alert(`District: ${districtName}\nTotal Cumulative Rainfall for this month: ${rainfall.toFixed(1)} mm`);
         } else {
-          alert(`District: ${districtName}\nRainfall for ${new Date(selectedDate).toLocaleDateString('en-IN')}: ${rainfall.toFixed(1)} mm`);
+          const dateStr = selectedDate ? new Date(selectedDate).toLocaleDateString('en-IN') : 'N/A';
+          alert(`District: ${districtName}\nRainfall for ${dateStr}: ${rainfall.toFixed(1)} mm`);
         }
       }
     });
@@ -390,6 +379,8 @@ export default function MapVisualization({
   }
 
   const mapHeight = compact ? '450px' : '700px';
+  const effectiveMode = mode || config?.mode || 'dual';
+  const showMultiLabels = effectiveMode === 'multi';
 
   return (
     <div 
@@ -401,17 +392,16 @@ export default function MapVisualization({
         center={[19.7515, 75.7139]}
         zoom={7}
         minZoom={6}
-        // Use preferCanvas only in interactive mode — SVG is needed for html2canvas export
-        preferCanvas={interactive}
+        preferCanvas={false}
         style={{ height: mapHeight, width: '100%', borderRadius: '0.5rem', background: 'transparent' }}
         className="z-0"
-        zoomControl={!compact}
-        dragging={interactive}
+        zoomControl={true}
+        dragging={true}
         scrollWheelZoom={!compact}
-        doubleClickZoom={!compact}
-        touchZoom={!compact}
-        keyboard={interactive}
-        boxZoom={interactive}
+        doubleClickZoom={true}
+        touchZoom={true}
+        keyboard={true}
+        boxZoom={true}
       >
         <GeoJSON
           key={`${JSON.stringify(rainfallData)}-${metric}-${config?.mode}-${JSON.stringify(Object.keys(metricData))}`}
@@ -429,6 +419,43 @@ export default function MapVisualization({
         <FitBounds geoJsonData={geoJsonData} />
       </MapContainer>
 
+      {/* Continuous Rainfall Legend for Map */}
+      {(metric === 'rainfall' || !metric) && (
+        <div className="absolute bottom-6 left-4 z-[1000] bg-white/95 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-2xl min-w-[140px]">
+          <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-widest mb-3 border-b border-gray-100 pb-1.5 flex justify-between items-center">
+            <span>RAINFALL</span>
+            <span className="text-[9px] text-gray-400 font-normal">mm/day</span>
+          </h4>
+          
+          <div className="flex gap-3 items-stretch h-32">
+            {/* Gradient Bar */}
+            <div 
+              className="w-3 rounded-full border border-gray-200 shadow-sm"
+              style={{ 
+                background: 'linear-gradient(to top, #D3D3D3, #E1F5FE 14%, #FFFFE0 28%, #FFFF00 42%, #FFA500 57%, #FF0000 71%, #8B0000 100%)' 
+              }}
+            ></div>
+            
+            {/* Labels */}
+            <div className="flex flex-col justify-between text-[10px] font-bold text-gray-600 py-0.5">
+              <span>204.5+</span>
+              <span>115.6</span>
+              <span>64.5</span>
+              <span>15.6</span>
+              <span>2.5</span>
+              <span>0</span>
+            </div>
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-gray-50 flex flex-col gap-1">
+             <div className="flex items-center gap-1.5 opacity-60">
+                <div className={`w-2 h-2 rounded-full ${effectiveMode === 'multi' ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
+                <span className="text-[9px] font-medium text-gray-500 uppercase tracking-tight">Mode: {effectiveMode}</span>
+             </div>
+          </div>
+        </div>
+      )}
+
       {/* Map title overlay — compact mode shows short label only */}
       {!compact && (
         <div 
@@ -442,7 +469,7 @@ export default function MapVisualization({
           <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111827', margin: 0 }}>
             {metric === 'rainfall' 
               ? (viewMode === 'daily' 
-                  ? `Rainfall: ${new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                  ? `Rainfall: ${selectedDate ? new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '...'}`
                   : `Rainfall: ${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`)
               : metric === 'subdivision' 
                 ? 'Subdivisions'

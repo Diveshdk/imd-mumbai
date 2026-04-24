@@ -71,9 +71,20 @@ const CATEGORY_COLORS: { [key: string]: { bg: string; border: string; text: stri
   'XH': { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800' }
 };
 
-export default function HRV2VerificationTab() {
+interface HRV2VerificationTabProps {
+  startDate: string;
+  setStartDate: (date: string) => void;
+  endDate: string;
+  setEndDate: (date: string) => void;
+}
+
+export default function HRV2VerificationTab({ 
+  startDate, 
+  setStartDate, 
+  endDate, 
+  setEndDate 
+}: HRV2VerificationTabProps) {
   const { config } = useRainfallConfig();
-  const [startDate, setStartDate] = useState<string>('2025-06-01');
 
   // Dynamic category names based on config
   const getCategoryName = (cat: string) => {
@@ -92,7 +103,6 @@ export default function HRV2VerificationTab() {
     };
     return defaults[cat] || cat;
   };
-  const [endDate, setEndDate] = useState<string>('2025-06-30');
   const [isLoading, setIsLoading] = useState(false);
   const [overviewResults, setOverviewResults] = useState<OverviewResults | null>(null);
   const [detailedResults, setDetailedResults] = useState<DetailedResults | null>(null);

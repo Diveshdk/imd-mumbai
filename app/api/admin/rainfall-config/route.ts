@@ -5,9 +5,19 @@ import {
   type RainfallConfig,
   type MultiModeClassification
 } from '@/app/utils/rainfallConfig';
+import { adminSupabase } from '@/lib/supabase/admin';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-// Admin password (in production, use environment variable)
-const ADMIN_PASSWORD = 'admin123';
+async function requireAdmin(request: NextRequest) {
+  const { supabase } = createServerSupabaseClient(request);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await adminSupabase.from('profiles').select('role, status, can_modify, can_delete').eq('id', user.id).single();
+  if (!profile || profile.status !== 'active') return null;
+  const isAuthorized = profile.role === 'admin' || profile.can_modify || profile.can_delete;
+  if (!isAuthorized) return null;
+  return user;
+}
 
 /**
  * GET /api/admin/rainfall-config
@@ -16,21 +26,10 @@ const ADMIN_PASSWORD = 'admin123';
 export async function GET(request: NextRequest) {
   try {
     const config = await loadRainfallConfig();
-    
-    return NextResponse.json({
-      success: true,
-      config
-    });
+    return NextResponse.json({ success: true, config });
   } catch (error: any) {
     console.error('Failed to load rainfall config:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to load configuration',
-        details: error.message
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Failed to load configuration', details: error.message }, { status: 500 });
   }
 }
 
@@ -41,20 +40,13 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { password, config } = body;
-    
-    // Validate password
-    if (!password || password !== ADMIN_PASSWORD) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid password'
-        },
-        { status: 401 }
-      );
+    const adminUser = await requireAdmin(request);
+    if (!adminUser) {
+      return NextResponse.json({ success: false, error: 'Unauthorized — admin access required' }, { status: 401 });
     }
-    
+
+    const body = await request.json();
+    const { config } = body;
     // Validate config structure
     // if (!config || !config.classifications || !Array.isArray(config.classifications)) {
     //   return NextResponse.json(

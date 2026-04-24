@@ -10,8 +10,6 @@ interface AdminConfigModalProps {
 }
 
 export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
   const [config, setConfig] = useState<RainfallConfig | null>(null);
   const [editedConfig, setEditedConfig] = useState<RainfallConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -23,11 +21,10 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
   const [thresholdInputs, setThresholdInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (isAuthenticated && !config) {
+    if (isOpen && !config) {
       loadConfig();
     }
-  }, [isAuthenticated]);
-
+  }, [isOpen]);
 
 
   const loadConfig = async () => {
@@ -59,18 +56,6 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
     }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (password === 'admin123') {
-      setIsAuthenticated(true);
-      toast.success('Access granted');
-    } else {
-      toast.error('Invalid password');
-      setPassword('');
-    }
-  };
-
   const handleModeChange = (newMode: 'dual' | 'multi') => {
     if (!editedConfig || editedConfig.mode === newMode) return;
     
@@ -86,10 +71,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
       const response = await fetch('/api/admin/rainfall-config/mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: 'admin123',
-          mode: pendingMode
-        })
+        body: JSON.stringify({ mode: pendingMode })
       });
 
       const result = await response.json();
@@ -141,10 +123,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
       const response = await fetch('/api/admin/rainfall-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: 'admin123',
-          config: finalConfig
-        })
+        body: JSON.stringify({ config: finalConfig })
       });
 
       const result = await response.json();
@@ -400,7 +379,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
       const response = await fetch('/api/admin/clear-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'admin123' })
+        body: JSON.stringify({})
       });
       const result = await response.json();
       if (result.success) {
@@ -493,8 +472,6 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
   };
 
   const handleClose = () => {
-    setIsAuthenticated(false);
-    setPassword('');
     setConfig(null);
     setEditedConfig(null);
     onClose();
@@ -509,7 +486,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
             <h2 className="text-xl font-bold text-white">
-              Admin Configuration - Rainfall Classification System
+              Rainfall Configuration - Rainfall Classification System
             </h2>
             <button onClick={handleClose} className="text-white hover:text-gray-200 transition-colors">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -520,41 +497,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
 
           {/* Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-            {!isAuthenticated ? (
-              // Password Form
-              <div className="max-w-md mx-auto">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                  <div className="flex items-center">
-                    <svg className="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-sm text-yellow-800 font-medium">Admin Access Required</span>
-                  </div>
-                </div>
-
-                <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Enter Admin Password
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter password"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      autoFocus
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
-                  >
-                    Authenticate
-                  </button>
-                </form>
-              </div>
-            ) : isLoading ? (
+            {isLoading ? (
               // Loading State
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
@@ -819,7 +762,7 @@ export default function AdminConfigModal({ isOpen, onClose }: AdminConfigModalPr
                 {editedConfig.mode === 'multi' && (
                   <div className="space-y-4">
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <h3 className="text-sm font-semibold text-green-900 mb-2">Multi Mode Configuration</h3>
+                      <h2 className="text-xl font-bold text-gray-900">Rainfall Configuration</h2>
                       <p className="text-xs text-green-700 mb-2">
                         Define classifications by setting their <strong>Base Rainfall (mm)</strong>. The system will automatically calculate the ranges and sort them in ascending order.
                       </p>

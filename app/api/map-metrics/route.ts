@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const leadDay = searchParams.get('leadDay') || 'D1';
     const category = searchParams.get('category'); // Optional: multi-mode category filter
+    const mode = searchParams.get('mode') as 'dual' | 'multi' | null;
+    const threshold = searchParams.get('threshold') ? parseFloat(searchParams.get('threshold')!) : undefined;
 
     if (!startDate || !endDate) {
       return NextResponse.json(
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get comparisons for the date range and lead day
-    const comparisons = await compareForDateRange(startDate, endDate, leadDay);
+    const comparisons = await compareForDateRange(startDate, endDate, leadDay, threshold, mode || undefined);
 
     const districts: Record<string, any> = {};
 
@@ -40,7 +42,9 @@ export async function GET(request: NextRequest) {
 
       for (const [district, distComps] of districtMap.entries()) {
         const stats = calculateCategoryBinaryAccuracy(distComps, category);
-        districts[district] = {
+        // Normalize to uppercase to match GeoJSON DISTRICT_NORM keys
+        const key = district.toUpperCase();
+        districts[key] = {
           pod: stats.pod,
           far: stats.far,
           csi: stats.csi,
@@ -54,7 +58,9 @@ export async function GET(request: NextRequest) {
       // Standard overall verification stats
       const districtStats = getDistrictWiseAccuracy(comparisons);
       for (const [district, stats] of districtStats.entries()) {
-        districts[district] = {
+        // Normalize to uppercase to match GeoJSON DISTRICT_NORM keys
+        const key = district.toUpperCase();
+        districts[key] = {
           pod: stats.pod,
           far: stats.far,
           csi: stats.csi,

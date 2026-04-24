@@ -20,7 +20,8 @@ export async function POST(request: NextRequest) {
       startDate, 
       endDate, 
       selectedDay, 
-      selectedDistrict 
+      selectedDistrict,
+      configMode
     } = body;
 
     // Validate inputs
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     // Mode 3: Per-district date-by-date breakdown for formula audit
     if (selectedDay && selectedDistrict) {
       const leadDayCode = selectedDay;
-      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold);
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold, configMode);
       
       // Filter to only this district
       const districtComparisons = comparisons.filter(c => c.district === selectedDistrict);
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     // Mode 2: Detailed view for specific day (district-wise summary)
     if (selectedDay) {
       const leadDayCode = selectedDay; // Already in format "D1", "D2", etc.
-      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold);
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold, configMode);
       
       // Calculate district-wise statistics for this specific day
       const districtStats = getDistrictWiseAccuracy(comparisons);
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
 
     for (const leadDay of leadDays) {
       const leadDayCode = leadDay.replace('Day-', 'D');
-      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold);
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold, configMode);
       const stats = calculateAccuracy(comparisons);
 
       leadTimeResults[leadDay] = {

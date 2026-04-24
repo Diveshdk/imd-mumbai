@@ -12,6 +12,8 @@ export async function GET(
   context: { params: Promise<{ date: string }> }
 ) {
   try {
+    const searchParams = request.nextUrl.searchParams;
+    const mode = searchParams.get('mode') as 'dual' | 'multi' | null;
     // Await params for Next.js 15+
     const { date } = await context.params;
     
@@ -59,7 +61,7 @@ export async function GET(
       
       // WARNING SOURCE: Always use the SELECTED DATE (e.g., June 11)
       // REALIZED SOURCE: Always use the SELECTED DATE + 1 (calculated above as targetYear/Month/Day)
-      const comparisons = await compareForDate(year, month, day, leadDay, targetYear, targetMonth, targetDay);
+      const comparisons = await compareForDate(year, month, day, leadDay, targetYear, targetMonth, targetDay, undefined, mode || undefined);
       const stats = calculateAccuracy(comparisons);
       
       // Format verifications for UI - use new comparison structure
@@ -97,7 +99,7 @@ export async function GET(
       const leadDay = leadDays[i];
       
       // Same logic for overall stats
-      const comparisons = await compareForDate(year, month, day, leadDay, targetYear, targetMonth, targetDay);
+      const comparisons = await compareForDate(year, month, day, leadDay, targetYear, targetMonth, targetDay, undefined, mode || undefined);
       allComparisons.push(...comparisons);
     }
     const overallStats = calculateAccuracy(allComparisons);

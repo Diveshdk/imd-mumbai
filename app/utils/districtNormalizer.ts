@@ -9,6 +9,25 @@
  * All variants map to a single canonical name
  */
 const DISTRICT_MAPPINGS: Record<string, string> = {
+  // Beed/Bid
+  'BEED': 'BID',
+  'BID': 'BID',
+  
+  // Mumbai variants - map all to MUMBAI
+  'MUMBAI': 'MUMBAI',
+  'MUMBAI CITY': 'MUMBAI',
+  'MUMBAI SUBURBAN': 'MUMBAI',
+  'SUBURBAN MUMBAI': 'MUMBAI',
+  'MUMBAICITY': 'MUMBAI',
+  'MUMBAISUBURBAN': 'MUMBAI',
+  'MUMBAI_CITY': 'MUMBAI',
+  'MUMBAI_SUBURBAN': 'MUMBAI',
+  'MUMBAI (CITY)': 'MUMBAI',
+  'MUMBAI (SUBURBAN)': 'MUMBAI',
+  'MUMBAI(CITY)': 'MUMBAI',
+  'MUMBAI(SUBURBAN)': 'MUMBAI',
+  'MUMBAI SUB': 'MUMBAI',
+  
   // Nashik variants
   'NASIK': 'NASHIK',
   'NASHIK': 'NASHIK',
@@ -33,6 +52,19 @@ const DISTRICT_MAPPINGS: Record<string, string> = {
   // Solapur variants
   'SOLAPUR': 'SOLAPUR',
   'SHOLAPUR': 'SOLAPUR',
+
+  // Ahmednagar / Ahilyanagar -> AHMADNAGAR (canonical in GeoJSON)
+  'AHMEDNAGAR': 'AHMADNAGAR',
+  'AHMADNAGAR': 'AHMADNAGAR',
+  'AHILYANAGAR': 'AHMADNAGAR',
+
+  // Osmanabad / Dharashiv
+  'OSMANABAD': 'DHARASHIV',
+  'DHARASHIV': 'DHARASHIV',
+
+  // Raigad
+  'RAIGAD': 'RAIGARH',
+  'RAIGARH': 'RAIGARH',
 };
 
 /**
@@ -41,7 +73,8 @@ const DISTRICT_MAPPINGS: Record<string, string> = {
  * @returns Canonical district name
  */
 export function normalizeDistrictName(districtName: string): string {
-  const normalized = districtName.trim().toUpperCase();
+  if (!districtName) return 'UNKNOWN';
+  const normalized = districtName.trim().toUpperCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
   return DISTRICT_MAPPINGS[normalized] || normalized;
 }
 
@@ -95,6 +128,45 @@ export function isVariantName(districtName: string): boolean {
   const normalized = districtName.trim().toUpperCase();
   return normalized in DISTRICT_MAPPINGS && DISTRICT_MAPPINGS[normalized] !== normalized;
 }
+
+/**
+ * Maharashtra Meteorological Subdivisions
+ * District names MUST match the canonical names in DISTRICT_MAPPINGS
+ */
+export const MAHARASHTRA_SUBDIVISIONS = [
+  {
+    name: 'Konkan',
+    shortName: 'Konkan',
+    color: '#6366f1',
+    cities: [
+      'MUMBAI', 'THANE', 'PALGHAR', 'RAIGARH', 'RATNAGIRI', 'SINDHUDURG'
+    ]
+  },
+  {
+    name: 'South Madhya Maharashtra',
+    shortName: 'S. Madhya MH',
+    color: '#10b981',
+    cities: [
+      'PUNE', 'SATARA', 'SANGLI', 'KOLHAPUR', 'SOLAPUR'
+    ]
+  },
+  {
+    name: 'North Madhya Maharashtra',
+    shortName: 'N. Madhya MH',
+    color: '#f59e0b',
+    cities: [
+      'NASHIK', 'DHULE', 'JALGAON', 'NANDURBAR', 'AHMADNAGAR'
+    ]
+  },
+  {
+    name: 'Marathwada',
+    shortName: 'Marathwada',
+    color: '#ef4444',
+    cities: [
+      'CHHATRAPATI SAMBHAJI NAGAR', 'JALNA', 'BID', 'LATUR', 'DHARASHIV', 'NANDED', 'HINGOLI', 'PARBHANI'
+    ]
+  }
+];
 
 /**
  * Get mapping statistics for validation

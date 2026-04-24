@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import { FileStorageManager, RealisedData } from '@/app/utils/fileStorageManager';
+import { adminSupabase } from '@/lib/supabase/admin';
 
 const GEMINI_API_KEY = process.env.GOOGLE_GENAI_API_KEY || '';
 const GEMINI_API_URL =
@@ -21,54 +20,56 @@ interface DistrictStats {
 }
 
 /**
- * Read all available realised rainfall data and compute per-district stats
+ * Read all available realised rainfall data from Supabase and compute per-district stats
  */
 async function buildRainfallContext(): Promise<{
   summary: string;
   districtStats: DistrictStats[];
   availableMonths: string[];
 }> {
-  const storage = new FileStorageManager();
   const districtMap = new Map<string, DistrictStats>();
   const availableMonthsSet = new Set<string>();
 
   try {
-    // 1. Get all realised data from KV and FS
-    // This is a bit heavy but necessary for the chatbot context
-    // We'll focus on May-Sept mostly or just what's available
-    const years = [2024, 2025, 2026];
-    const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    // Query all realised data from the last few years
+    const { data, error } = await adminSupabase
+      .from('master_data_files')
+      .select('year, month, day, districts')
+      .eq('type', 'realised')
+      .is('lead_day', null)
+      .order('year', { ascending: true })
+      .order('month', { ascending: true })
+      .order('day', { ascending: true });
 
-    for (const year of years) {
-      for (const month of months) {
-        const monthData = await storage.loadMonthRealisedData(year, month);
-        if (monthData.size > 0) {
-          availableMonthsSet.add(`${year}-${month}`);
-          
-          for (const [date, data] of monthData.entries()) {
-            for (const [district, rainfall] of Object.entries(data.districts)) {
-              if (rainfall === null || isNaN(rainfall)) continue;
-              const upper = district.trim().toUpperCase();
+    if (error) {
+      console.error('Supabase chatbot context error:', error);
+    } else if (data) {
+      for (const row of data) {
+        const monthKey = `${row.year}-${row.month}`;
+        availableMonthsSet.add(monthKey);
+        const dateStr = `${row.year}-${String(row.month).padStart(2,'0')}-${String(row.day).padStart(2,'0')}`;
 
-              if (!districtMap.has(upper)) {
-                districtMap.set(upper, {
-                  district: upper,
-                  totalRainfall: 0,
-                  maxRainfall: 0,
-                  maxDate: date,
-                  daysWithRain: 0,
-                  availableData: [],
-                });
-              }
-              const stats = districtMap.get(upper)!;
-              stats.totalRainfall += rainfall;
-              stats.daysWithRain += 1;
-              stats.availableData.push({ date, rainfall });
-              if (rainfall > stats.maxRainfall) {
-                stats.maxRainfall = rainfall;
-                stats.maxDate = date;
-              }
-            }
+        for (const [district, rainfall] of Object.entries(row.districts as Record<string, number | null>)) {
+          if (rainfall === null || isNaN(rainfall as number)) continue;
+          const upper = district.trim().toUpperCase();
+
+          if (!districtMap.has(upper)) {
+            districtMap.set(upper, {
+              district: upper,
+              totalRainfall: 0,
+              maxRainfall: 0,
+              maxDate: dateStr,
+              daysWithRain: 0,
+              availableData: [],
+            });
+          }
+          const stats = districtMap.get(upper)!;
+          stats.totalRainfall += rainfall as number;
+          stats.daysWithRain += 1;
+          stats.availableData.push({ date: dateStr, rainfall: rainfall as number });
+          if ((rainfall as number) > stats.maxRainfall) {
+            stats.maxRainfall = rainfall as number;
+            stats.maxDate = dateStr;
           }
         }
       }
@@ -95,6 +96,7 @@ async function buildRainfallContext(): Promise<{
 
   return { summary, districtStats, availableMonths };
 }
+
 
 /**
  * Build a detailed per-district daily dataset for fine-grained query answering

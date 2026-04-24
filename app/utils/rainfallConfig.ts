@@ -6,7 +6,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { kv } from '@vercel/kv';
 
 // Dual Mode Configuration
 export interface DualModeConfig {
@@ -66,13 +65,22 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
   }
   let config: RainfallConfig | null = null;
 
-  // 1. Try Vercel KV first (if environment variables are present)
-  const kvUrl = (process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL)?.trim();
-  if (kvUrl) {
+  // 1. Try Supabase first (if environment variables are present)
+  const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (sbUrl) {
     try {
-      config = await kv.get<RainfallConfig>('rainfall_config');
-    } catch (kvError) {
-      console.error('KV load error (falling back to FS):', kvError);
+      const { adminSupabase } = await import('@/lib/supabase/admin');
+      const { data } = await adminSupabase
+        .from('rainfall_config')
+        .select('config')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (data?.config) {
+        config = data.config as RainfallConfig;
+      }
+    } catch (sbError) {
+      console.error('Supabase config load error (falling back to FS):', sbError);
     }
   }
 
@@ -159,32 +167,36 @@ export async function saveRainfallConfig(config: RainfallConfig): Promise<void> 
   try {
     config.lastUpdated = new Date().toISOString();
     
-    // 1. Try saving to Vercel KV if available
-    const kvUrl = (process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL)?.trim();
-    if (kvUrl) {
-      await kv.set('rainfall_config', config);
+    // 1. Try saving to Supabase if available
+    const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (sbUrl) {
+      const { adminSupabase } = await import('@/lib/supabase/admin');
+      // Delete old config and insert fresh one
+      await adminSupabase.from('rainfall_config').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      const { error } = await adminSupabase.from('rainfall_config').insert({
+        config,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw new Error('Supabase save error: ' + error.message);
     }
 
-    // 2. Try saving to Filesystem (will fail on Vercel but work locally)
+    // 2. Also save to Filesystem as local backup
     try {
       const dataDir = path.dirname(CONFIG_PATH);
       if (!fs.existsSync(dataDir)) {
         await fs.promises.mkdir(dataDir, { recursive: true });
       }
-      
       await fs.promises.writeFile(
         CONFIG_PATH,
         JSON.stringify(config, null, 2),
         'utf-8'
       );
     } catch (fsError) {
-      // On Vercel this is expected to fail, we only log it if KV is also missing
-      const kvUrl = (process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL)?.trim();
-      if (!kvUrl) {
-        console.error('Failed to save to FS and KV is not available:', fsError);
+      if (!sbUrl) {
+        console.error('Failed to save to FS and Supabase is not available:', fsError);
         throw fsError;
       }
-      console.log('Skipped FS save (likely on Vercel)');
+      console.log('Skipped FS save (running in cloud mode)');
     }
     
     // Clear cache

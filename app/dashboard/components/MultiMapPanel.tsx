@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { toast } from 'react-hot-toast';
+import { downloadResearchPanel } from '@/app/utils/mapExportUtils';
+import { useRainfallConfig } from '@/app/utils/useRainfallConfig';
 
 // Dynamically import MapVisualization to avoid SSR issues
 const MapVisualization = dynamic(() => import('@/app/dashboard/components/MapVisualization'), {
@@ -34,7 +36,7 @@ interface MultiMapPanelProps {
   endDate: string;
   leadDay: string;
   viewMode: 'daily' | 'monthly';
-  selectedDate: string;
+  selectedDate: string | null;
   selectedMonth: string;
   /** Category for per-category binary stats in multi-mode (empty = overall) */
   selectedCategory?: string;
@@ -58,6 +60,7 @@ export default function MultiMapPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const { config } = useRainfallConfig();
 
   // Re-fetch whenever date range, lead day, or category changes
   useEffect(() => {
@@ -68,7 +71,17 @@ export default function MultiMapPanel({
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({ startDate, endDate, leadDay });
+      const params = new URLSearchParams({ 
+        startDate, 
+        endDate, 
+        leadDay,
+        mode: configMode
+      });
+
+      // Pass threshold if in dual mode (to match tabular view defaults)
+      if (configMode === 'dual' && config?.classifications?.dual?.threshold) {
+        params.set('threshold', config.classifications.dual.threshold.toString());
+      }
 
       // Pass category for per-category binary stats when in multi-mode
       if (configMode === 'multi' && selectedCategory) {
@@ -93,127 +106,29 @@ export default function MultiMapPanel({
     }
   };
 
-  /**
-   * Download the panel as PNG.
-   * Strategy: The panel maps use SVG (preferCanvas=false / interactive=false).
-   * We use html2canvas with foreignObjectRendering for reliable SVG capture.
-   */
   const handleDownload = async () => {
     if (!panelRef.current) return;
     setIsDownloading(true);
     
-    // Save current scroll position
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    
     try {
-      // Scroll to top-left to avoid html2canvas offset issues
-      window.scrollTo(0, 0);
+      const period = viewMode === 'daily' ? selectedDate : selectedMonth;
+      const catSuffix = selectedCategory ? `_${selectedCategory}` : '';
+      const fileName = `Research_Panel_${period}_${leadDay}${catSuffix}`;
 
-      const html2canvas = (await import('html2canvas')).default;
-
-      // Wait for any pending renders/fitBounds to settle after scroll
-      await new Promise(r => setTimeout(r, 600));
-
-      const canvas = await html2canvas(panelRef.current, {
-        backgroundColor: '#ffffff',
-        scale: 1.5, // 1.5 is safer for high-DPI coordinate alignment
-        logging: true, // Enable logging for debugging if needed
-        useCORS: true,
-        allowTaint: true,
-        foreignObjectRendering: false,
-        scrollX: 0,
-        scrollY: 0,
-        // Force a large virtual window to prevent any viewport-based clipping
-        windowWidth: 1920,
-        windowHeight: 3000,
-        // Workaround for 'lab' and 'oklch' color parsing errors in html2canvas
-        onclone: (clonedDoc: Document) => {
-          const style = clonedDoc.createElement('style');
-          style.innerHTML = `
-            * { 
-              transition: none !important; 
-              animation: none !important; 
-              text-shadow: none !important;
-            }
-            /* Force Leaflet to NOT use 3D transforms in the capture clone */
-            .leaflet-map-pane, .leaflet-tile-pane, .leaflet-objects-pane, 
-            .leaflet-shadow-pane, .leaflet-overlay-pane, .leaflet-marker-pane, 
-            .leaflet-tooltip-pane, .leaflet-popup-pane, .leaflet-layer, .leaflet-zoom-animated {
-              transform: none !important;
-              left: 0 !important;
-              top: 0 !important;
-            }
-            /* Reset SVG clipping which often causes 'cut' maps in capture */
-            svg.leaflet-zoom-animated {
-              width: 100% !important;
-              height: 100% !important;
-              transform: none !important;
-            }
-          `;
-          clonedDoc.head.appendChild(style);
-
-          // Aggressive manual style sanitization using computed styles
-          const elements = clonedDoc.getElementsByTagName("*");
-          for (let i = 0; i < elements.length; i++) {
-            const el = elements[i] as HTMLElement;
-            
-            // Fix Leaflet paths that might be offset
-            if (el.tagName === 'path') {
-              el.style.transform = 'none';
-            }
-
-            if (el.style) {
-              const computed = window.getComputedStyle(el);
-              const properties = ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke', 'outlineColor'];
-              properties.forEach(prop => {
-                const val = (computed as any)[prop];
-                if (val && (val.includes('oklch') || val.includes('lab'))) {
-                   const fallback = prop === 'color' || prop === 'fill' ? '#111827' : 'rgba(0,0,0,0)';
-                   el.style.setProperty(prop === 'backgroundColor' ? 'background-color' : 
-                                      prop === 'borderColor' ? 'border-color' : 
-                                      prop === 'outlineColor' ? 'outline-color' : prop, 
-                                      fallback, 'important');
-                }
-              });
-            }
-          }
-        },
-        // Ignore Leaflet's internal image elements that can fail cross-origin
-        ignoreElements: (el: Element) => {
-          // Ignore tile layers (there are none here, but safety net)
-          return el.tagName === 'IMG' && (el as HTMLImageElement).crossOrigin !== 'anonymous';
-        },
-      } as any);
-
-      // Trigger download
-      canvas.toBlob((blob) => {
-        if (!blob) { toast.error('Failed to create image'); setIsDownloading(false); return; }
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const period = viewMode === 'daily' ? selectedDate : selectedMonth;
-        const catSuffix = selectedCategory ? `_${selectedCategory}` : '';
-        link.download = `Research_Panel_${period}_${leadDay}${catSuffix}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        toast.success('Research panel downloaded!');
-        setIsDownloading(false);
-      }, 'image/png');
+      await downloadResearchPanel(panelRef.current, fileName, {
+        scale: 2,
+      });
+      toast.success('Research panel downloaded!');
     } catch (err: any) {
       console.error('Download error:', err);
       toast.error('Download failed: ' + err.message);
-      setIsDownloading(false);
     } finally {
-      // Restore scroll position
-      window.scrollTo(scrollX, scrollY);
+      setIsDownloading(false);
     }
   };
 
   const periodLabel = viewMode === 'daily'
-    ? new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    ? (selectedDate ? new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '...')
     : new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
   const categoryLabel = configMode === 'multi' && selectedCategory

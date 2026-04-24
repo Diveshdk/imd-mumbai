@@ -13,6 +13,7 @@ import {
   type RealisedData
 } from './unifiedDataLoader';
 import { calculateVerificationDate, parseDate, formatDate } from './dateUtils';
+import { normalizeDistrictName, normalizeDistrictData } from './districtNormalizer';
 import {
   loadRainfallConfig,
   classifyRainfall,
@@ -199,12 +200,14 @@ export async function compareForDate(
     return [];
   }
 
+  // CRITICAL: Normalize district datasets to canonical names before merging
+  // This prevents "Nashik" vs "Nasik" or "Beed" vs "Bid" mismatches
+  const warningDistricts = normalizeDistrictData(warning?.districts || {});
+  const realisedDistricts = normalizeDistrictData(realised?.districts || {});
+
   const comparisons: Comparison[] = [];
 
-  // Get all districts from both datasets
-  const warningDistricts = warning?.districts || {};
-  const realisedDistricts = realised?.districts || {};
-
+  // Get all districts from both normalized datasets
   const allDistricts = new Set([
     ...Object.keys(warningDistricts),
     ...Object.keys(realisedDistricts)

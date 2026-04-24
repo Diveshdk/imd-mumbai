@@ -11,9 +11,18 @@ interface DateInfo {
   cached: boolean;
 }
 
-export default function LeadTimeVerificationTab() {
+interface LeadTimeVerificationTabProps {
+  mode?: 'dual' | 'multi';
+  selectedDate: string | null;
+  setSelectedDate: (date: string | null) => void;
+}
+
+export default function LeadTimeVerificationTab({ 
+  mode = 'dual', 
+  selectedDate, 
+  setSelectedDate 
+}: LeadTimeVerificationTabProps) {
   const [availableDates, setAvailableDates] = useState<DateInfo[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [verificationData, setVerificationData] = useState<any>(null);
   const [isLoadingDate, setIsLoadingDate] = useState(false);
   const [hasData, setHasData] = useState(false);
@@ -122,7 +131,7 @@ export default function LeadTimeVerificationTab() {
     setVerificationData(null);
 
     try {
-      const response = await fetch(`/api/verification/${date}`);
+      const response = await fetch(`/api/verification/${date}?mode=${mode}`);
       const result = await response.json();
 
       if (result.success) {

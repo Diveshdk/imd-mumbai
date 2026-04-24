@@ -8,23 +8,26 @@ import * as XLSX from 'xlsx';
 import { getDaysInMonth } from './dateUtils';
 
 /**
- * Valid IMD warning codes that are allowed in uploaded files.
- * Any other non-null code will cause the upload to be rejected.
+ * Valid IMD warning codes range: 0-30
+ * Code 0 means "No Warning" and is treated as null.
+ * All integer codes in this range are valid IMD codes.
  */
-export const VALID_WARNING_CODES: ReadonlySet<number> = new Set([
-  1, 4, 5, 8, 9, 12, 13, 14, 15, 16, 17, 21, 24, 25, 26, 27, 28, 29, 37, 44
-]);
+export const VALID_CODE_RANGE = { min: 0, max: 30 };
 
 /**
- * Validate that all non-null codes in the parsed warning data belong
- * to the allowed set. Returns the list of invalid codes found.
+ * Validate that all non-null codes in the parsed warning data are within
+ * the valid range (1-30). Returns the list of invalid codes found.
+ * Code 0 is always valid (No Warning).
  */
 export function validateWarningCodes(parsedData: ParsedWarningData): number[] {
   const invalidCodes: Set<number> = new Set();
   for (const row of parsedData.rows) {
     for (const value of Object.values(row.dailyValues)) {
-      if (value !== null && value !== undefined && !VALID_WARNING_CODES.has(value)) {
-        invalidCodes.add(value);
+      if (value !== null && value !== undefined) {
+        // Invalid only if it's a negative number or greater than 30
+        if (value < 0 || value > 30) {
+          invalidCodes.add(value);
+        }
       }
     }
   }
@@ -136,7 +139,9 @@ export function parseWarningSheet(
           dailyValues[day] = null;
         } else {
           // Extract base code (integer part) for decimal codes like 5.1, 27.2
-          dailyValues[day] = Math.floor(numValue);
+          const code = Math.floor(numValue);
+          // Code 0 = No Warning, treated as null
+          dailyValues[day] = code === 0 ? null : code;
         }
       }
     }
@@ -350,7 +355,9 @@ function parseSheetData(
           dailyValues[day] = null;
         } else {
           // Extract base code (integer part) for decimal codes like 5.1, 27.2
-          dailyValues[day] = Math.floor(numValue);
+          const code = Math.floor(numValue);
+          // Code 0 = No Warning, treated as null
+          dailyValues[day] = code === 0 ? null : code;
         }
       }
     }

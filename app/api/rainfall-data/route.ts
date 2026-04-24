@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import { normalizeDistrictName } from '@/app/utils/rainfallColors';
+import { adminSupabase } from '@/lib/supabase/admin';
+import { normalizeDistrictName } from '@/app/utils/districtNormalizer';
 
-interface DailyDataFile {
-  date: string;
-  districts: {
-    [district: string]: number | null;
-  };
-}
-
+// API route for fetching daily and monthly realised rainfall data
 interface DistrictRainfall {
   district: string;
   rainfall: number;
@@ -64,141 +57,117 @@ export async function GET(request: NextRequest) {
 }
 
 async function getDailyRainfall(dateStr: string): Promise<DistrictRainfall[]> {
-  const [year, month, day] = dateStr.split('-');
-  
-  // Construct file path: data/realised/YYYY/MM/DD.json
-  const filePath = path.join(
-    process.cwd(),
-    'data',
-    'realised',
-    year,
-    month,
-    `${day}.json`
-  );
+  const [yearStr, monthStr, dayStr] = dateStr.split('-');
+  const year = parseInt(yearStr);
+  const month = parseInt(monthStr);
+  const day = parseInt(dayStr);
 
-  if (!fs.existsSync(filePath)) {
-    console.log(`File not found: ${filePath}`);
+  // Query Supabase for this specific day's realised data
+  const { data, error } = await adminSupabase
+    .from('master_data_files')
+    .select('districts')
+    .eq('type', 'realised')
+    .eq('year', year)
+    .eq('month', month)
+    .eq('day', day)
+    .is('lead_day', null)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Supabase getDailyRainfall error:', error);
     return [];
   }
 
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const data: DailyDataFile = JSON.parse(content);
+  if (!data?.districts) return [];
 
-    const result: DistrictRainfall[] = [];
-
-    // Process districts
-    for (const [district, rainfall] of Object.entries(data.districts)) {
-      if (rainfall !== null && !isNaN(rainfall)) {
-        const normalizedDistrict = normalizeDistrictName(district);
-        result.push({
-          district: normalizedDistrict,
-          rainfall: parseFloat(rainfall.toFixed(1))
-        });
-
-        // Handle Mumbai special case
-        if (normalizedDistrict === 'MUMBAI') {
-          result.push({
-            district: 'MUMBAI SUBURBAN',
-            rainfall: parseFloat(rainfall.toFixed(1))
-          });
-        }
-      }
-    }
-
-    return result;
-  } catch (error: any) {
-    console.error(`Error reading file ${filePath}:`, error);
-    return [];
-  }
-}
-
-async function getMonthlyRainfall(monthStr: string): Promise<DistrictRainfall[]> {
-  const [year, month] = monthStr.split('-');
-
-  // Construct directory path: data/realised/YYYY/MM/
-  const monthDir = path.join(
-    process.cwd(),
-    'data',
-    'realised',
-    year,
-    month
-  );
-
-  if (!fs.existsSync(monthDir)) {
-    console.log(`Directory not found: ${monthDir}`);
-    return [];
-  }
-
-  try {
-    const files = fs.readdirSync(monthDir);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
-
-    if (jsonFiles.length === 0) {
-      return [];
-    }
-
-    // Map to store accumulated rainfall and max rainfall tracking per district
-    const districtStats = new Map<string, { total: number; maxVal: number; maxDate: string }>();
-
-    // Read all daily files for the month
-    for (const file of jsonFiles) {
-      const filePath = path.join(monthDir, file);
-      const day = file.replace('.json', '');
-      const dateStr = `${year}-${month}-${day}`;
-
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const data: DailyDataFile = JSON.parse(content);
-
-        // Update stats for each district
-        for (const [district, rainfall] of Object.entries(data.districts)) {
-          if (rainfall !== null && !isNaN(rainfall)) {
-            const normalizedDistrict = normalizeDistrictName(district);
-            
-            if (!districtStats.has(normalizedDistrict)) {
-              districtStats.set(normalizedDistrict, { total: 0, maxVal: -1, maxDate: '' });
-            }
-            
-            const stats = districtStats.get(normalizedDistrict)!;
-            stats.total += rainfall;
-            
-            if (rainfall > stats.maxVal) {
-              stats.maxVal = rainfall;
-              stats.maxDate = dateStr;
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Error reading file ${filePath}:`, error);
-        continue;
-      }
-    }
-
-    // Convert to result array
-    const result: DistrictRainfall[] = [];
-    for (const [district, stats] of districtStats.entries()) {
+  const result: DistrictRainfall[] = [];
+  for (const [district, rainfall] of Object.entries(data.districts as Record<string, number | null>)) {
+    if (rainfall !== null && !isNaN(rainfall)) {
+      const normalizedDistrict = normalizeDistrictName(district);
       result.push({
-        district,
-        rainfall: parseFloat(stats.total.toFixed(1)),
-        maxRainfallDate: stats.maxDate,
-        maxRainfallValue: parseFloat(stats.maxVal.toFixed(1))
+        district: normalizedDistrict,
+        rainfall: parseFloat(rainfall.toFixed(1)),
       });
 
       // Handle Mumbai special case
-      if (district === 'MUMBAI') {
+      if (normalizedDistrict === 'MUMBAI') {
         result.push({
           district: 'MUMBAI SUBURBAN',
-          rainfall: parseFloat(stats.total.toFixed(1)),
-          maxRainfallDate: stats.maxDate,
-          maxRainfallValue: parseFloat(stats.maxVal.toFixed(1))
+          rainfall: parseFloat(rainfall.toFixed(1)),
         });
       }
     }
+  }
 
-    return result;
-  } catch (error: any) {
-    console.error(`Error reading directory ${monthDir}:`, error);
+  return result;
+}
+
+async function getMonthlyRainfall(monthStr: string): Promise<DistrictRainfall[]> {
+  const [yearStr, monthNum] = monthStr.split('-');
+  const year = parseInt(yearStr);
+  const month = parseInt(monthNum);
+
+  // Query all days for this month
+  const { data, error } = await adminSupabase
+    .from('master_data_files')
+    .select('day, districts')
+    .eq('type', 'realised')
+    .eq('year', year)
+    .eq('month', month)
+    .is('lead_day', null)
+    .order('day', { ascending: true });
+
+  if (error) {
+    console.error('Supabase getMonthlyRainfall error:', error);
     return [];
   }
+
+  if (!data || data.length === 0) return [];
+
+  // Accumulate totals per district
+  const districtStats = new Map<string, { total: number; maxVal: number; maxDate: string }>();
+
+  for (const row of data) {
+    const dateStr = `${yearStr}-${monthNum}-${String(row.day).padStart(2, '0')}`;
+    const districts = row.districts as Record<string, number | null>;
+
+    for (const [district, rainfall] of Object.entries(districts)) {
+      if (rainfall !== null && !isNaN(rainfall)) {
+        const normalizedDistrict = normalizeDistrictName(district);
+
+        if (!districtStats.has(normalizedDistrict)) {
+          districtStats.set(normalizedDistrict, { total: 0, maxVal: -1, maxDate: '' });
+        }
+
+        const stats = districtStats.get(normalizedDistrict)!;
+        stats.total += rainfall;
+
+        if (rainfall > stats.maxVal) {
+          stats.maxVal = rainfall;
+          stats.maxDate = dateStr;
+        }
+      }
+    }
+  }
+
+  const result: DistrictRainfall[] = [];
+  for (const [district, stats] of districtStats.entries()) {
+    result.push({
+      district,
+      rainfall: parseFloat(stats.total.toFixed(1)),
+      maxRainfallDate: stats.maxDate,
+      maxRainfallValue: parseFloat(stats.maxVal.toFixed(1)),
+    });
+
+    if (district === 'MUMBAI') {
+      result.push({
+        district: 'MUMBAI SUBURBAN',
+        rainfall: parseFloat(stats.total.toFixed(1)),
+        maxRainfallDate: stats.maxDate,
+        maxRainfallValue: parseFloat(stats.maxVal.toFixed(1)),
+      });
+    }
+  }
+
+  return result;
 }
